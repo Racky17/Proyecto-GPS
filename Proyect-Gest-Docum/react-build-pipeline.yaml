@@ -1,0 +1,31 @@
+trigger:
+  - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  appName: 'REACTAPPNAME' # Elimine la barra diagonal inicial
+
+steps:
+  - script: echo 'Starting React build --> $(System.DefaultWorkingDirectory) --> $(Build.ArtifactStagingDirectory)'
+    displayName: '0. Building process'
+
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '18.x'
+    displayName: '1. Install Node.js'
+
+  - script: npm ci
+    displayName: '2. Npm Install CI'
+
+  - script: |
+      npm run build
+    displayName: '3. Npm Build'
+
+  - upload: $(System.DefaultWorkingDirectory)/build/
+    artifact: drop
+    displayName: '4. Upload files to Artifact'
+
+  - script: rm -rf ./path/to/unused/files
+    displayName: '5. Cleanup Unused Files'
