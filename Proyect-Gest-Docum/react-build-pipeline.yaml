@@ -5,7 +5,7 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  appName: 'REACTAPPNAME' # Elimine la barra diagonal inicial
+  appName: 'Project-Gest-Docum' # Elimine la barra diagonal inicial
 
 steps:
   - script: echo 'Starting React build --> $(System.DefaultWorkingDirectory) --> $(Build.ArtifactStagingDirectory)'
