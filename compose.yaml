@@ -1,0 +1,10 @@
+services:
+  main:
+    image: gps-upload
+    build:
+      context: Proyect-Gest-Docum
+      dockerfile: ./Dockerfile
+    environment:
+      NODE_ENV: production
+    ports:
+      - 22:22
