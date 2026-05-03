@@ -1,29 +1,10 @@
-/**
- * AppSidebar Component
- *
- * Collapsible navigation sidebar with branding, menu items, and toggle controls.
- *
- * Features:
- * - Redux-controlled visibility state
- * - Unfoldable/narrow mode for more screen space
- * - Brand logo with full and narrow variants
- * - Close button for mobile devices
- * - Footer with toggle button
- * - Dark color scheme
- * - Fixed positioning
- *
- * @component
- * @example
- * return (
- *   <AppSidebar />
- * )
- */
-
-import React from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 
 import {
   CCloseButton,
+  CNavItem,
+  CNavTitle,
   CSidebar,
   CSidebarBrand,
   CSidebarFooter,
@@ -31,6 +12,7 @@ import {
   CSidebarToggler,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
+import { cilLibrary, cilTag } from '@coreui/icons'
 
 import { AppSidebarNav } from './AppSidebarNav'
 
@@ -56,6 +38,86 @@ const AppSidebar = () => {
   const dispatch = useDispatch()
   const unfoldable = useSelector((state) => state.sidebarUnfoldable)
   const sidebarShow = useSelector((state) => state.sidebarShow)
+  const [sets, setSets] = useState([])
+  const [tags, setTags] = useState([])
+
+  const currentUser = React.useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('authUser') || 'null')
+    } catch (error) {
+      return null
+    }
+  }, [])
+
+  useEffect(() => {
+    const authToken = localStorage.getItem('authToken')
+    if (!authToken) return
+
+    const loadSidebarData = async () => {
+      try {
+        const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+        const [setsRes, tagsRes] = await Promise.all([
+          fetch(`${apiBase}/api/user/sets`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+          }),
+          fetch(`${apiBase}/api/user/tags`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+          }),
+        ])
+
+        const [setsData, tagsData] = await Promise.all([setsRes.json(), tagsRes.json()])
+        setSets(Array.isArray(setsData.data) ? setsData.data : [])
+        setTags(Array.isArray(tagsData.data) ? tagsData.data : [])
+      } catch (error) {
+        setSets([])
+        setTags([])
+      }
+    }
+
+    loadSidebarData()
+  }, [])
+
+  const sidebarItems = useMemo(() => {
+    const items = [...navigation]
+
+    if (sets.length > 0) {
+      items.push({ component: CNavTitle, name: 'Document Sets:' })
+      sets.forEach((setItem) => {
+        items.push({
+          component: CNavItem,
+          name: setItem.title,
+          to: `/?setId=${setItem._id}`,
+          icon: (
+            <CIcon
+              icon={cilLibrary}
+              customClassName="nav-icon"
+              style={setItem.color ? { color: setItem.color } : undefined}
+            />
+          ),
+        })
+      })
+    }
+
+    if (tags.length > 0) {
+      items.push({ component: CNavTitle, name: 'Document Tags:' })
+      tags.forEach((tag) => {
+        items.push({
+          component: CNavItem,
+          name: tag.name,
+          to: '/', /* TODO: Implement tag filtering route via search bar in Home */
+          icon: (
+            <CIcon
+              icon={cilTag}
+              customClassName="nav-icon"
+              style={tag.color ? { color: tag.color } : undefined}
+            />
+          ),
+        })
+      })
+    }
+
+    return items
+  }, [navigation, sets, tags])
 
   return (
     <CSidebar
@@ -79,7 +141,16 @@ const AppSidebar = () => {
           onClick={() => dispatch({ type: 'set', sidebarShow: false })}
         />
       </CSidebarHeader>
-      <AppSidebarNav items={navigation} />
+
+      <div className="sidebar-user px-3 py-3 border-bottom text-white">
+        <div className="text-uppercase small text-secondary">User</div>
+        <div className="fw-semibold text-truncate" title={currentUser?.email || 'Not signed in'}>
+          {currentUser?.email || 'Not signed in'}
+        </div>
+      </div>
+
+      <AppSidebarNav items={sidebarItems} />
+
       <CSidebarFooter className="border-top d-none d-lg-flex">
         <CSidebarToggler
           onClick={() => dispatch({ type: 'set', sidebarUnfoldable: !unfoldable })}
