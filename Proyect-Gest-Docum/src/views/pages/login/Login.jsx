@@ -60,6 +60,10 @@ const Login = () => {
 
       localStorage.setItem('authToken', result.token)
       localStorage.setItem('authUser', JSON.stringify(result.user))
+      const savedUserId = result.user.id ?? result.user._id
+      if (savedUserId) {
+        localStorage.setItem('userId', savedUserId)
+      }
       navigate('/')
     } catch (err) {
       setError('Unable to connect to backend. Please try again.')

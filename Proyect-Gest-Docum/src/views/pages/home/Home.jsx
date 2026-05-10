@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import PropTypes from 'prop-types'
 import { useDispatch } from 'react-redux'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   CButton,
   CCard,
@@ -22,6 +22,7 @@ import {
 import CIcon from '@coreui/icons-react'
 import {
   cilArrowLeft,
+  cilFile,
   cilFolderOpen,
   cilLibrary,
   cilSearch,
@@ -43,6 +44,7 @@ const Home = () => {
   const [folders, setFolders] = useState([])
   const [documents, setDocuments] = useState([])
   const [tags, setTags] = useState([])
+  const [documentUserTags, setDocumentUserTags] = useState({}) // { documentId: [tagIds] }
   const [loadingTags, setLoadingTags] = useState(false)
   const [openTagPopoverDocId, setOpenTagPopoverDocId] = useState(null)
   const [currentLocation, setCurrentLocation] = useState({ type: 'root', id: null })
@@ -52,10 +54,32 @@ const Home = () => {
   const [showDocumentUploadModal, setShowDocumentUploadModal] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [selectedUploadFile, setSelectedUploadFile] = useState(null)
+  const [viewingShared, setViewingShared] = useState(false)
   const fileInputRef = useRef(null)
 
   const authToken = localStorage.getItem('authToken')
+  const authUser = JSON.parse(localStorage.getItem('authUser') || 'null')
+  const userIdFromStorage = authUser
+    ? String(authUser.id ?? authUser._id ?? authUser.userId ?? authUser.uid ?? '')
+    : null
   const location = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    setViewingShared(params.get('shared') === 'true')
+  }, [location.search])
+
+  const sharedDocuments = useMemo(() => {
+    // Get documents that are shared with me but I don't own
+    if (!userIdFromStorage) return []
+    return documents.filter((doc) => {
+      const docSharedWith = Array.isArray(doc.sharedWith) ? doc.sharedWith.map(String) : []
+      const isSharedWithMe = docSharedWith.includes(userIdFromStorage)
+      const isNotMine = String(doc.ownerId) !== userIdFromStorage
+      return isSharedWithMe && isNotMine
+    })
+  }, [documents, userIdFromStorage])
 
   const selectedFolder = useMemo(
     () => folders.find((folder) => String(folder._id) === String(selected.id)),
@@ -119,7 +143,9 @@ const Home = () => {
 
       setSets(Array.isArray(setsData.data) ? setsData.data : [])
       setFolders(Array.isArray(foldersData.data) ? foldersData.data : [])
-      setDocuments(Array.isArray(docsData.data) ? docsData.data : [])
+      const loadedDocs = Array.isArray(docsData.data) ? docsData.data : []
+      setDocuments(loadedDocs)
+      fetchUserDocumentTags(loadedDocs)
     } catch (error) {
       setMessage('Unable to load home list data. Please refresh.')
     } finally {
@@ -149,16 +175,40 @@ const Home = () => {
     }
   }
 
+  const fetchUserDocumentTags = async (docs) => {
+    if (!authToken || !Array.isArray(docs) || docs.length === 0) return
+    try {
+      const tagPromises = docs.map((doc) =>
+        fetch(`${apiBase}/api/user/documents/${doc._id}/my-tags`, {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        })
+          .then((res) => res.json())
+          .then((result) => ({ docId: doc._id, tags: result.data || [] }))
+          .catch(() => ({ docId: doc._id, tags: [] })),
+      )
+      const results = await Promise.all(tagPromises)
+      const tagsMap = {}
+      results.forEach(({ docId, tags }) => {
+        tagsMap[docId] = tags
+      })
+      setDocumentUserTags(tagsMap)
+    } catch (error) {
+      // silently fail
+    }
+  }
+
   const handleToggleDocumentTag = async (doc, tagId) => {
     if (!authToken) return
-    const currentTags = Array.isArray(doc.tags) ? doc.tags.map(String) : []
+    const currentTags = Array.isArray(documentUserTags[doc._id]) ? documentUserTags[doc._id].map(String) : []
     const normalizedTagId = String(tagId)
     const updatedTags = currentTags.includes(normalizedTagId)
       ? currentTags.filter((id) => id !== normalizedTagId)
       : [...currentTags, normalizedTagId]
 
     try {
-      const response = await fetch(`${apiBase}/api/user/documents/${doc._id}`, {
+      const response = await fetch(`${apiBase}/api/user/documents/${doc._id}/my-tags`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -171,11 +221,10 @@ const Home = () => {
         setMessage(result.message || 'Unable to update document tags.')
         return
       }
-      setDocuments((previous) =>
-        previous.map((item) =>
-          String(item._id) === String(doc._id) ? { ...item, tags: updatedTags } : item,
-        ),
-      )
+      setDocumentUserTags((prev) => ({
+        ...prev,
+        [doc._id]: updatedTags,
+      }))
       setMessage('Document tags updated.')
     } catch (error) {
       setMessage('Unable to update document tags.')
@@ -183,7 +232,7 @@ const Home = () => {
   }
 
   const renderTagPopover = (doc) => {
-    const activeTagIds = Array.isArray(doc.tags) ? doc.tags.map(String) : []
+    const activeTagIds = Array.isArray(documentUserTags[doc._id]) ? documentUserTags[doc._id].map(String) : []
     const isVisible = openTagPopoverDocId === String(doc._id)
     return (
       <CPopover
@@ -258,6 +307,70 @@ const Home = () => {
       </CPopover>
     )
   }
+
+  const renderTagMarkers = (item) => {
+    // For documents, use user-specific tags; for folders/sets, use document tags
+    const itemTagIds = item._id && documentUserTags[item._id] 
+      ? documentUserTags[item._id].map(String) 
+      : (Array.isArray(item.tags) ? item.tags.map(String) : [])
+    if (itemTagIds.length === 0 || tags.length === 0) {
+      return null
+    }
+
+    const matchedTags = tags.filter((tag) => itemTagIds.includes(String(tag._id)))
+    if (matchedTags.length === 0) {
+      return null
+    }
+
+    return (
+      <div className="d-flex flex-wrap gap-1 mt-3">
+        {matchedTags.slice(0, 6).map((tag) => (
+          <span
+            key={tag._id}
+            title={tag.name}
+            className="rounded-circle border border-body-secondary"
+            style={{
+              width: '10px',
+              height: '10px',
+              backgroundColor: tag.color || '#0d6efd',
+              display: 'inline-block',
+            }}
+          />
+        ))}
+        {matchedTags.length > 6 && (
+          <span className="small text-body-secondary">+{matchedTags.length - 6}</span>
+        )}
+      </div>
+    )
+  }
+
+  const renderItemActions = (type, item) => (
+    <div className="d-flex flex-wrap gap-2 mt-3">
+      <CButton
+        size="sm"
+        color="secondary"
+        className="rounded-pill px-3"
+        onClick={(event) => {
+          event.stopPropagation()
+          shareItem(type, item)
+        }}
+      >
+        Share
+      </CButton>
+      {type === 'document' ? renderTagPopover(item) : null}
+      <CButton
+        size="sm"
+        color="secondary"
+        className="rounded-pill px-3"
+        onClick={(event) => {
+          event.stopPropagation()
+          moreActions(type, item)
+        }}
+      >
+        ⋯
+      </CButton>
+    </div>
+  )
 
   useEffect(() => {
     fetchData()
@@ -347,10 +460,6 @@ const Home = () => {
   }
 
   const handleSelectDocument = (doc) => {
-    if (selected.type === 'document' && String(selected.id) === String(doc._id)) {
-      downloadDocument(doc)
-      return
-    }
     setSelected({ type: 'document', id: doc._id })
     setMessage('')
   }
@@ -400,48 +509,6 @@ const Home = () => {
   const moreActions = (type, item) => {
     setMessage(`More actions for ${type} '${item.title}' coming soon.`)
   }
-
-  const renderItemActions = (type, item) => (
-    <div className="d-flex justify-content-end gap-2 w-50">
-      <CButton
-        size="sm"
-        color="secondary"
-        className="rounded-pill px-3"
-        onClick={(event) => {
-          event.stopPropagation()
-          shareItem(type, item)
-        }}
-      >
-        Share
-      </CButton>
-      {type === 'document' ? (
-        renderTagPopover(item)
-      ) : (
-        <CButton
-          size="sm"
-          color="secondary"
-          className="rounded-pill px-3"
-          onClick={(event) => {
-            event.stopPropagation()
-            setMessage('Tagging is only available for documents.')
-          }}
-        >
-          Tag
-        </CButton>
-      )}
-      <CButton
-        size="sm"
-        color="secondary"
-        className="rounded-pill px-3"
-        onClick={(event) => {
-          event.stopPropagation()
-          moreActions(type, item)
-        }}
-      >
-        ⋯
-      </CButton>
-    </div>
-  )
 
   const createItem = async (type) => {
     setMessage('')
@@ -665,7 +732,7 @@ const Home = () => {
         <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3 mb-4">
           <div>
             <h1 className="display-6 mb-0">
-              {currentBreadcrumb.map((crumb, index) => (
+              {viewingShared ? 'Shared with me' : currentBreadcrumb.map((crumb, index) => (
                 <span key={`${crumb.type}-${crumb.id || 'root'}`}> 
                   {index > 0 && <span className="text-body-secondary">/</span>}{' '}
                   <CLink
@@ -681,10 +748,14 @@ const Home = () => {
                 </span>
               ))}
             </h1>
-            <div className="text-body-secondary">Browse the current level and drill deeper by opening sets or folders.</div>
+            <div className="text-body-secondary">
+              {viewingShared 
+                ? 'Documents shared with you by other users.'
+                : 'Browse the current level and drill deeper by opening sets or folders.'}
+            </div>
           </div>
           <div className="d-flex flex-wrap gap-2">
-            {actionButtons.map((action) => (
+            {!viewingShared && actionButtons.map((action) => (
               <CButton
                 key={action.type}
                 color="primary"
@@ -700,10 +771,22 @@ const Home = () => {
                 {action.label}
               </CButton>
             ))}
+            <CButton
+              color={viewingShared ? 'primary' : 'secondary'}
+              size="sm"
+              className="rounded-pill px-3"
+              onClick={() => {
+                const nextViewingShared = !viewingShared
+                setViewingShared(nextViewingShared)
+                navigate(`/?shared=${nextViewingShared ? 'true' : 'false'}`, { replace: true })
+              }}
+            >
+              {viewingShared ? 'Back to My Files' : 'View Shared Files'}
+            </CButton>
           </div>
         </div>
 
-        {currentLocation.type !== 'root' && (
+        {!viewingShared && currentLocation.type !== 'root' && (
           <div className="mb-4">
             <CButton color="secondary" size="sm" className="rounded-pill px-3" onClick={handleGoBack}>
               <CIcon icon={cilArrowLeft} className="me-2" />
@@ -718,10 +801,6 @@ const Home = () => {
           </CInputGroupText>
           <CFormInput placeholder="Search Document" className="border-0" disabled />
         </CInputGroup>
-
-        {message && (
-          <div className="alert alert-info rounded-4 px-4 py-3">{message}</div>
-        )}
 
         <CModal visible={showDocumentUploadModal} size="lg" onClose={handleCloseDocumentUploadModal} backdrop="static">
           <CModalHeader>
@@ -771,73 +850,132 @@ const Home = () => {
           </CModalFooter>
         </CModal>
 
-        <CCard className="bg-body-secondary rounded-4 p-4">
+        <CCard className="bg-body-secondary rounded-4 p-4 mb-4">
           <CCardBody>
             {loading ? (
               <div className="text-center text-body-secondary">Loading your document structure...</div>
+            ) : viewingShared ? (
+              // Shared Files View
+              sharedDocuments.length === 0 ? (
+                <div className="text-center text-body-secondary">No documents have been shared with you yet.</div>
+              ) : (
+                <CRow className="g-3">
+                  {sharedDocuments.map((doc) => {
+                    const isSelected = selected.type === 'document' && String(selected.id) === String(doc._id)
+                    return (
+                      <CCol xs={12} sm={6} lg={4} key={doc._id}>
+                        <div
+                          className={`h-100 d-flex flex-column p-3 rounded-4 ${
+                            isSelected ? 'bg-primary text-white' : 'bg-body border border-body-secondary'
+                          }`}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => handleSelectDocument(doc)}
+                          onDoubleClick={() => downloadDocument(doc)}
+                        >
+                          <div className="d-flex align-items-start gap-2 mb-3">
+                            <CIcon icon={cilFile} className="fs-4" />
+                            <div>
+                              <div className="fw-semibold">{doc.title}</div>
+                              <div className="text-body-secondary small">
+                                From: <strong>{doc.ownerName || 'Unknown'}</strong>
+                              </div>
+                              {renderTagMarkers(doc)}
+                            </div>
+                          </div>
+                          <div className="mt-auto">{renderItemActions('document', doc)}</div>
+                        </div>
+                      </CCol>
+                    )
+                  })}
+                </CRow>
+              )
             ) : sets.length === 0 ? (
               <div className="text-center text-body-secondary">No sets yet. Create your first set to start organizing folders and documents.</div>
             ) : (
-              <ul className="list-unstyled mb-0">
-                {currentLocation.type === 'root' &&
-                  sets.map((setItem) => (
-                    <li key={setItem._id} className="mb-4">
-                      <div
-                        className={`d-flex align-items-center mb-3 p-3 rounded-3 bg-primary text-white`}
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => navigateToLocation('set', setItem._id)}
-                      >
-                        <div className="d-flex align-items-center gap-2 w-50">
-                          <CIcon icon={cilLibrary} className="fs-4" />
-                          <span className="h6 mb-0">{setItem.title}</span>
-                        </div>
-                        {renderItemActions('set', setItem)}
-                      </div>
-                    </li>
-                  ))}
+              <>
+                {currentLocation.type === 'root' && (
+                  <CRow className="g-3">
+                    {sets.map((setItem) => {
+                      const isSelected = selected.type === 'set' && String(selected.id) === String(setItem._id)
+                      return (
+                        <CCol xs={12} sm={6} lg={4} key={setItem._id}>
+                          <div
+                            className={`h-100 d-flex flex-column p-3 rounded-4 ${
+                              isSelected ? 'bg-primary text-white' : 'bg-primary text-white border border-body-secondary'
+                            }`}
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => navigateToLocation('set', setItem._id)}
+                          >
+                            <div className="d-flex align-items-start gap-2 mb-3">
+                              <CIcon icon={cilLibrary} className="fs-4" />
+                              <div>
+                                <div className="fw-semibold">{setItem.title}</div>
+                                {renderTagMarkers(setItem)}
+                              </div>
+                            </div>
+                            <div className="mt-auto">{renderItemActions('set', setItem)}</div>
+                          </div>
+                        </CCol>
+                      )
+                    })}
+                  </CRow>
+                )}
 
                 {currentLocation.type === 'set' && currentSet && (
                   <>
                     {((foldersBySet[String(currentSet._id)] || []).length > 0 ||
                       (docsBySet[String(currentSet._id)] || []).filter((doc) => !doc.folderId).length > 0) ? (
-                      <>
-                        {(foldersBySet[String(currentSet._id)] || []).map((folder) => (
-                          <div key={folder._id} className="mb-3">
-                            <div
-                              className={`d-flex align-items-center p-3 rounded-3 ${
-                                selected.type === 'folder' && String(selected.id) === String(folder._id)
-                                  ? 'bg-primary text-white'
-                                  : 'bg-body border border-body-secondary'
-                              }`}
-                              style={{ cursor: 'pointer' }}
-                              onClick={() => navigateToLocation('folder', folder._id)}
-                            >
-                              <div className="d-flex align-items-center gap-2 w-50">
-                                <CIcon icon={cilFolderOpen} className="fs-5" />
-                                <span>{folder.title}</span>
+                      <CRow className="g-3">
+                        {(foldersBySet[String(currentSet._id)] || []).map((folder) => {
+                          const isSelected = selected.type === 'folder' && String(selected.id) === String(folder._id)
+                          return (
+                            <CCol xs={12} sm={6} lg={4} key={folder._id}>
+                              <div
+                                className={`h-100 d-flex flex-column p-3 rounded-4 ${
+                                  isSelected ? 'bg-primary text-white' : 'bg-body border border-body-secondary'
+                                }`}
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => navigateToLocation('folder', folder._id)}
+                              >
+                                <div className="d-flex align-items-start gap-2 mb-3">
+                                  <CIcon icon={cilFolderOpen} className="fs-4" />
+                                  <div>
+                                    <div className="fw-semibold">{folder.title}</div>
+                                    {renderTagMarkers(folder)}
+                                  </div>
+                                </div>
+                                <div className="mt-auto">{renderItemActions('folder', folder)}</div>
                               </div>
-                              {renderItemActions('folder', folder)}
-                            </div>
-                          </div>
-                        ))}
+                            </CCol>
+                          )
+                        })}
                         {(docsBySet[String(currentSet._id)] || [])
                           .filter((doc) => !doc.folderId)
-                          .map((doc) => (
-                            <div
-                              key={doc._id}
-                              className={`d-flex align-items-center p-3 rounded-3 mb-2 ${
-                                selected.type === 'document' && String(selected.id) === String(doc._id)
-                                  ? 'bg-primary text-white'
-                                  : 'bg-body border border-body-secondary'
-                              }`}
-                              style={{ cursor: 'pointer' }}
-                              onClick={() => handleSelectDocument(doc)}
-                            >
-                              <div className="w-50">{doc.title}</div>
-                              {renderItemActions('document', doc)}
-                            </div>
-                          ))}
-                      </>
+                          .map((doc) => {
+                            const isSelected = selected.type === 'document' && String(selected.id) === String(doc._id)
+                            return (
+                              <CCol xs={12} sm={6} lg={4} key={doc._id}>
+                                <div
+                                  className={`h-100 d-flex flex-column p-3 rounded-4 ${
+                                    isSelected ? 'bg-primary text-white' : 'bg-body border border-body-secondary'
+                                  }`}
+                                  style={{ cursor: 'pointer' }}
+                                  onClick={() => handleSelectDocument(doc)}
+                                  onDoubleClick={() => downloadDocument(doc)}
+                                >
+                                  <div className="d-flex align-items-start gap-2 mb-3">
+                                    <CIcon icon={cilFile} className="fs-4" />
+                                    <div>
+                                      <div className="fw-semibold">{doc.title}</div>
+                                      {renderTagMarkers(doc)}
+                                    </div>
+                                  </div>
+                                  <div className="mt-auto">{renderItemActions('document', doc)}</div>
+                                </div>
+                              </CCol>
+                            )
+                          })}
+                      </CRow>
                     ) : (
                       <div className="text-body-secondary">No folders or documents available in this set.</div>
                     )}
@@ -847,30 +985,45 @@ const Home = () => {
                 {currentLocation.type === 'folder' && currentFolder && (
                   <>
                     {(docsByFolder[String(currentFolder._id)] || []).length > 0 ? (
-                      (docsByFolder[String(currentFolder._id)] || []).map((doc) => (
-                        <div
-                          key={doc._id}
-                          className={`d-flex align-items-center p-3 rounded-3 mb-2 ${
-                            selected.type === 'document' && String(selected.id) === String(doc._id)
-                              ? 'bg-primary text-white'
-                              : 'bg-body border border-body-secondary'
-                          }`}
-                          style={{ cursor: 'pointer' }}
-                          onClick={() => handleSelectDocument(doc)}
-                        >
-                          <div className="w-50">{doc.title}</div>
-                          {renderItemActions('document', doc)}
-                        </div>
-                      ))
+                      <CRow className="g-3">
+                        {(docsByFolder[String(currentFolder._id)] || []).map((doc) => {
+                          const isSelected = selected.type === 'document' && String(selected.id) === String(doc._id)
+                          return (
+                            <CCol xs={12} sm={6} lg={4} key={doc._id}>
+                              <div
+                                className={`h-100 d-flex flex-column p-3 rounded-4 ${
+                                  isSelected ? 'bg-primary text-white' : 'bg-body border border-body-secondary'
+                                }`}
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => handleSelectDocument(doc)}
+                                onDoubleClick={() => downloadDocument(doc)}
+                              >
+                                <div className="d-flex align-items-start gap-2 mb-3">
+                                  <CIcon icon={cilFile} className="fs-4" />
+                                  <div>
+                                    <div className="fw-semibold">{doc.title}</div>
+                                    {renderTagMarkers(doc)}
+                                  </div>
+                                </div>
+                                <div className="mt-auto">{renderItemActions('document', doc)}</div>
+                              </div>
+                            </CCol>
+                          )
+                        })}
+                      </CRow>
                     ) : (
                       <div className="text-body-secondary">No documents available in this folder.</div>
                     )}
                   </>
                 )}
-              </ul>
+              </>
             )}
           </CCardBody>
         </CCard>
+
+        {message && (
+          <div className="alert alert-info rounded-4 px-4 py-3">{message}</div>
+        )}
       </CCol>
     </CRow>
   )

@@ -15,7 +15,7 @@ const MONGODB_DB = process.env.MONGODB_DB || 'proyecto_gps'
 const SALT_ROUNDS = 12
 
 const client = new MongoClient(MONGODB_URI)
-let usersCollection, docsCollection, foldersCollection, setsCollection, tagsCollection
+let usersCollection, docsCollection, foldersCollection, setsCollection, tagsCollection, userDocumentTagsCollection
 let mongoConnected = false
 
 const fallbackUsers = [
@@ -33,6 +33,7 @@ const fallbackDocs = []
 const fallbackFolders = []
 const fallbackSets = []
 const fallbackTags = []
+const fallbackUserDocumentTags = []
 
 const allowedOrigins = [
   process.env.FRONTEND_ORIGIN,
@@ -66,6 +67,152 @@ const createToken = (user) => {
 
 const hashPassword = async (password) => bcrypt.hash(password, SALT_ROUNDS)
 const comparePassword = async (password, hash) => bcrypt.compare(password, hash)
+
+// Encryption utilities for file-at-rest security
+const getMasterKey = () => {
+  const key = process.env.ENCRYPTION_KEY
+  if (!key) {
+    throw new Error(
+      'ENCRYPTION_KEY not set. Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
+    )
+  }
+  return Buffer.from(key, 'hex')
+}
+
+const encryptFile = (fileData) => {
+  const masterKey = getMasterKey()
+  const iv = crypto.randomBytes(16)
+  const cipher = crypto.createCipheriv('aes-256-gcm', masterKey, iv)
+
+  let encrypted = cipher.update(fileData)
+  encrypted = Buffer.concat([encrypted, cipher.final()])
+
+  const authTag = cipher.getAuthTag()
+
+  return {
+    encryptedData: encrypted.toString('hex'),
+    iv: iv.toString('hex'),
+    authTag: authTag.toString('hex'),
+  }
+}
+
+const decryptFile = (encryptedFile) => {
+  const masterKey = getMasterKey()
+  const decipher = crypto.createDecipheriv(
+    'aes-256-gcm',
+    masterKey,
+    Buffer.from(encryptedFile.iv, 'hex'),
+  )
+
+  decipher.setAuthTag(Buffer.from(encryptedFile.authTag, 'hex'))
+
+  let decrypted = decipher.update(Buffer.from(encryptedFile.encryptedData, 'hex'))
+  decrypted = Buffer.concat([decrypted, decipher.final()])
+
+  return decrypted
+}
+
+// Hierarchical sharing utilities
+const shareDocumentWithUser = async (docId, userId) => {
+  if (mongoConnected && docsCollection) {
+    return docsCollection.updateOne(
+      { _id: new ObjectId(docId) },
+      { $addToSet: { sharedWith: new ObjectId(userId) } },
+    )
+  }
+  const fallbackIndex = fallbackDocs.findIndex((doc) => String(doc._id) === String(docId))
+  if (fallbackIndex >= 0) {
+    fallbackDocs[fallbackIndex].sharedWith = fallbackDocs[fallbackIndex].sharedWith || []
+    if (!fallbackDocs[fallbackIndex].sharedWith.includes(String(userId))) {
+      fallbackDocs[fallbackIndex].sharedWith.push(String(userId))
+    }
+  }
+}
+
+const shareFolderWithUser = async (folderId, userId) => {
+  if (mongoConnected && foldersCollection) {
+    return foldersCollection.updateOne(
+      { _id: new ObjectId(folderId) },
+      { $addToSet: { sharedWith: new ObjectId(userId) } },
+    )
+  }
+  const fallbackIndex = fallbackFolders.findIndex((folder) => String(folder._id) === String(folderId))
+  if (fallbackIndex >= 0) {
+    fallbackFolders[fallbackIndex].sharedWith = fallbackFolders[fallbackIndex].sharedWith || []
+    if (!fallbackFolders[fallbackIndex].sharedWith.includes(String(userId))) {
+      fallbackFolders[fallbackIndex].sharedWith.push(String(userId))
+    }
+  }
+}
+
+const shareSetWithUser = async (setId, userId) => {
+  if (mongoConnected && setsCollection) {
+    return setsCollection.updateOne(
+      { _id: new ObjectId(setId) },
+      { $addToSet: { sharedWith: new ObjectId(userId) } },
+    )
+  }
+  const fallbackIndex = fallbackSets.findIndex((set) => String(set._id) === String(setId))
+  if (fallbackIndex >= 0) {
+    fallbackSets[fallbackIndex].sharedWith = fallbackSets[fallbackIndex].sharedWith || []
+    if (!fallbackSets[fallbackIndex].sharedWith.includes(String(userId))) {
+      fallbackSets[fallbackIndex].sharedWith.push(String(userId))
+    }
+  }
+}
+
+const getSharedWithList = (item) => {
+  if (!item) return []
+  if (Array.isArray(item.sharedWith)) {
+    return item.sharedWith.map((id) => String(id))
+  }
+  return []
+}
+
+// User-specific document tagging helpers
+const findUserDocumentTags = async (userId, documentId) => {
+  if (mongoConnected && userDocumentTagsCollection) {
+    return userDocumentTagsCollection.findOne({
+      userId: new ObjectId(userId),
+      documentId: new ObjectId(documentId),
+    })
+  }
+  return fallbackUserDocumentTags.find(
+    (udt) => String(udt.userId) === String(userId) && String(udt.documentId) === String(documentId),
+  )
+}
+
+const upsertUserDocumentTags = async (userId, documentId, tags) => {
+  if (mongoConnected && userDocumentTagsCollection) {
+    return userDocumentTagsCollection.findOneAndUpdate(
+      { userId: new ObjectId(userId), documentId: new ObjectId(documentId) },
+      {
+        $set: {
+          userId: new ObjectId(userId),
+          documentId: new ObjectId(documentId),
+          tags: tags.map((t) => (typeof t === 'string' ? t : String(t))),
+          updatedAt: new Date(),
+        },
+      },
+      { upsert: true, returnDocument: 'after' },
+    )
+  }
+  const existing = fallbackUserDocumentTags.find(
+    (udt) => String(udt.userId) === String(userId) && String(udt.documentId) === String(documentId),
+  )
+  const record = {
+    userId: String(userId),
+    documentId: String(documentId),
+    tags: tags.map((t) => (typeof t === 'string' ? t : String(t))),
+    updatedAt: new Date(),
+  }
+  if (existing) {
+    Object.assign(existing, record)
+  } else {
+    fallbackUserDocumentTags.push(record)
+  }
+  return { value: record }
+}
 
 const findUserByUsernameOrEmail = async (value) => {
   if (mongoConnected && usersCollection) {
@@ -298,6 +445,7 @@ const connectMongo = async () => {
     foldersCollection = database.collection('folders')
     setsCollection = database.collection('sets')
     tagsCollection = database.collection('tags')
+    userDocumentTagsCollection = database.collection('userDocumentTags')
 
     await usersCollection.createIndex({ username: 1 }, { unique: true })
     await usersCollection.createIndex({ email: 1 }, { unique: true })
@@ -313,6 +461,7 @@ const connectMongo = async () => {
     await setsCollection.createIndex({ userId: 1 })
     await tagsCollection.createIndex({ ownerId: 1 })
     await tagsCollection.createIndex({ userId: 1 })
+    await userDocumentTagsCollection.createIndex({ userId: 1, documentId: 1 })
 
     const admin = await usersCollection.findOne({ username: 'admin' })
     if (!admin) {
@@ -528,7 +677,7 @@ app.get('/api/user/documents', authenticate, async (req, res) => {
 })
 
 app.post('/api/user/documents', authenticate, upload.single('file'), async (req, res) => {
-  const { title: rawTitle, content, folderId, setId } = req.body
+  const { title: rawTitle, folderId, setId } = req.body
   const file = req.file
   const title = rawTitle || (file ? file.originalname : '')
 
@@ -537,23 +686,53 @@ app.post('/api/user/documents', authenticate, upload.single('file'), async (req,
   }
 
   try {
+    let fileData = undefined
+    if (file) {
+      const encrypted = encryptFile(file.buffer)
+      fileData = {
+        encryptedData: encrypted.encryptedData,
+        iv: encrypted.iv,
+        authTag: encrypted.authTag,
+        originalName: file.originalname,
+        contentType: file.mimetype,
+        originalSize: file.size,
+      }
+    }
+
+    // Inherit sharedWith from parent folder or set and also share with the parent owner
+    let sharedWith = []
+    let parentOwnerId = null
+    if (folderId) {
+      const folder = mongoConnected
+        ? await foldersCollection.findOne({ _id: new ObjectId(folderId) })
+        : fallbackFolders.find((f) => String(f._id) === String(folderId))
+      if (folder) {
+        sharedWith = getSharedWithList(folder)
+        parentOwnerId = String(folder.ownerId || folder.userId || '')
+      }
+    } else if (setId) {
+      const set = mongoConnected
+        ? await setsCollection.findOne({ _id: new ObjectId(setId) })
+        : fallbackSets.find((s) => String(s._id) === String(setId))
+      if (set) {
+        sharedWith = getSharedWithList(set)
+        parentOwnerId = String(set.ownerId || set.userId || '')
+      }
+    }
+
+    if (parentOwnerId && parentOwnerId !== String(req.user._id) && !sharedWith.includes(parentOwnerId)) {
+      sharedWith.push(parentOwnerId)
+    }
+
     const document = {
       userId: req.user._id,
       ownerId: req.user._id,
-      sharedWith: [],
+      sharedWith: sharedWith.map((id) => (mongoConnected ? new ObjectId(id) : id)),
       title,
-      content: content || '',
       folderId: folderId || null,
       setId: setId || null,
       tags: [],
-      file: file
-        ? {
-            data: file.buffer,
-            originalName: file.originalname,
-            contentType: file.mimetype,
-            size: file.size,
-          }
-        : undefined,
+      file: fileData,
       createdAt: new Date(),
       updatedAt: new Date(),
     }
@@ -592,14 +771,28 @@ app.get('/api/user/documents/:id/download', authenticate, async (req, res) => {
       return res.status(404).json({ message: 'Document not found.' })
     }
 
-    if (!document.file || !document.file.data) {
+    if (!document.file) {
       return res.status(404).json({ message: 'No file attached to this document.' })
     }
 
-    let fileData = document.file.data
-    if (!Buffer.isBuffer(fileData)) {
-      fileData = Buffer.from(fileData.buffer || fileData)
+    let fileData
+    if (document.file.encryptedData && document.file.iv && document.file.authTag) {
+      // Decrypt encrypted file
+      try {
+        fileData = decryptFile(document.file)
+      } catch (decryptError) {
+        return res.status(500).json({ message: 'Unable to decrypt document file.' })
+      }
+    } else if (document.file.data) {
+      // Fallback for unencrypted files (backwards compatibility)
+      fileData = document.file.data
+      if (!Buffer.isBuffer(fileData)) {
+        fileData = Buffer.from(fileData.buffer || fileData)
+      }
+    } else {
+      return res.status(404).json({ message: 'No file data found.' })
     }
+
     const filename = document.file.originalName || document.title || 'document'
 
     res.setHeader('Content-Type', document.file.contentType || 'application/octet-stream')
@@ -716,6 +909,42 @@ app.delete('/api/user/tags/:id', authenticate, async (req, res) => {
   }
 })
 
+app.get('/api/user/documents/:id/my-tags', authenticate, async (req, res) => {
+  const documentId = req.params.id
+  try {
+    const userTags = await findUserDocumentTags(req.user._id, documentId)
+    res.json({ data: userTags?.tags || [] })
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to load document tags.' })
+  }
+})
+
+app.put('/api/user/documents/:id/my-tags', authenticate, async (req, res) => {
+  const documentId = req.params.id
+  const { tags } = req.body
+
+  if (!Array.isArray(tags)) {
+    return res.status(400).json({ message: 'Tags must be an array.' })
+  }
+
+  try {
+    const doc = mongoConnected
+      ? await docsCollection.findOne({ _id: new ObjectId(documentId) })
+      : fallbackDocs.find((d) => String(d._id) === String(documentId))
+
+    if (!doc) {
+      return res.status(404).json({ message: 'Document not found.' })
+    }
+
+    const sanitizedTags = tags.map(String)
+    const result = await upsertUserDocumentTags(req.user._id, documentId, sanitizedTags)
+
+    res.json({ data: { tags: sanitizedTags } })
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to update document tags.' })
+  }
+})
+
 app.post('/api/user/documents/:id/share', authenticate, async (req, res) => {
   const { targetEmail } = req.body
   if (!targetEmail) {
@@ -728,6 +957,7 @@ app.post('/api/user/documents/:id/share', authenticate, async (req, res) => {
   }
 
   const itemId = req.params.id
+  const userIdToShare = mongoConnected ? new ObjectId(userToShare._id) : String(userToShare._id)
   try {
     const item = mongoConnected
       ? await docsCollection.findOne({ _id: new ObjectId(itemId) })
@@ -741,23 +971,16 @@ app.post('/api/user/documents/:id/share', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Only the owner can share this document.' })
     }
 
-    const update = await addSharedAccess(docsCollection, itemId, userToShare._id)
-    if (mongoConnected && update && update.matchedCount === 0) {
-      return res.status(404).json({ message: 'Document not found.' })
-    }
-    const fallbackIndex = fallbackDocs.findIndex((item) => String(item._id) === String(itemId))
-    if (!mongoConnected && fallbackIndex >= 0) {
-      const fallbackDoc = fallbackDocs[fallbackIndex]
-      fallbackDoc.sharedWith = fallbackDoc.sharedWith || []
-      if (!fallbackDoc.sharedWith.includes(String(userToShare._id))) {
-        fallbackDoc.sharedWith.push(String(userToShare._id))
-      }
-    }
+    // Share only the document (no upward cascade)
+    await shareDocumentWithUser(itemId, userIdToShare)
+
     res.json({ message: 'Document shared successfully.' })
   } catch (error) {
     res.status(500).json({ message: 'Unable to share document.' })
   }
 })
+
+
 
 app.post('/api/user/folders/:id/share', authenticate, async (req, res) => {
   const { targetEmail } = req.body
@@ -771,6 +994,7 @@ app.post('/api/user/folders/:id/share', authenticate, async (req, res) => {
   }
 
   const itemId = req.params.id
+  const userIdToShare = mongoConnected ? new ObjectId(userToShare._id) : String(userToShare._id)
   try {
     const item = mongoConnected
       ? await foldersCollection.findOne({ _id: new ObjectId(itemId) })
@@ -784,23 +1008,37 @@ app.post('/api/user/folders/:id/share', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Only the owner can share this folder.' })
     }
 
-    const update = await addSharedAccess(foldersCollection, itemId, userToShare._id)
-    if (mongoConnected && update && update.matchedCount === 0) {
-      return res.status(404).json({ message: 'Folder not found.' })
+    // Share the folder
+    await shareFolderWithUser(itemId, userIdToShare)
+
+    // Share parent set if folder belongs to a set
+    if (item.setId) {
+      await shareSetWithUser(item.setId, userIdToShare)
     }
-    const fallbackIndex = fallbackFolders.findIndex((item) => String(item._id) === String(itemId))
-    if (!mongoConnected && fallbackIndex >= 0) {
-      const fallbackFolder = fallbackFolders[fallbackIndex]
-      fallbackFolder.sharedWith = fallbackFolder.sharedWith || []
-      if (!fallbackFolder.sharedWith.includes(String(userToShare._id))) {
-        fallbackFolder.sharedWith.push(String(userToShare._id))
-      }
+
+    // Share all documents in this folder (downward cascade)
+    if (mongoConnected && docsCollection) {
+      await docsCollection.updateMany(
+        { folderId: new ObjectId(itemId) },
+        { $addToSet: { sharedWith: new ObjectId(userToShare._id) } },
+      )
+    } else {
+      fallbackDocs.forEach((doc) => {
+        if (String(doc.folderId) === String(itemId)) {
+          doc.sharedWith = doc.sharedWith || []
+          if (!doc.sharedWith.includes(String(userToShare._id))) {
+            doc.sharedWith.push(String(userToShare._id))
+          }
+        }
+      })
     }
+
     res.json({ message: 'Folder shared successfully.' })
   } catch (error) {
     res.status(500).json({ message: 'Unable to share folder.' })
   }
 })
+
 
 app.post('/api/user/sets/:id/share', authenticate, async (req, res) => {
   const { targetEmail } = req.body
@@ -814,6 +1052,7 @@ app.post('/api/user/sets/:id/share', authenticate, async (req, res) => {
   }
 
   const itemId = req.params.id
+  const userIdToShare = mongoConnected ? new ObjectId(userToShare._id) : String(userToShare._id)
   try {
     const item = mongoConnected
       ? await setsCollection.findOne({ _id: new ObjectId(itemId) })
@@ -827,23 +1066,49 @@ app.post('/api/user/sets/:id/share', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Only the owner can share this set.' })
     }
 
-    const update = await addSharedAccess(setsCollection, itemId, userToShare._id)
-    if (mongoConnected && update && update.matchedCount === 0) {
-      return res.status(404).json({ message: 'Set not found.' })
+    // Share the set
+    await shareSetWithUser(itemId, userIdToShare)
+
+    // Share all folders in this set (downward cascade)
+    if (mongoConnected && foldersCollection) {
+      await foldersCollection.updateMany(
+        { setId: new ObjectId(itemId) },
+        { $addToSet: { sharedWith: new ObjectId(userToShare._id) } },
+      )
+    } else {
+      fallbackFolders.forEach((folder) => {
+        if (String(folder.setId) === String(itemId)) {
+          folder.sharedWith = folder.sharedWith || []
+          if (!folder.sharedWith.includes(String(userToShare._id))) {
+            folder.sharedWith.push(String(userToShare._id))
+          }
+        }
+      })
     }
-    const fallbackIndex = fallbackSets.findIndex((item) => String(item._id) === String(itemId))
-    if (!mongoConnected && fallbackIndex >= 0) {
-      const fallbackSet = fallbackSets[fallbackIndex]
-      fallbackSet.sharedWith = fallbackSet.sharedWith || []
-      if (!fallbackSet.sharedWith.includes(String(userToShare._id))) {
-        fallbackSet.sharedWith.push(String(userToShare._id))
-      }
+
+    // Share all documents in this set (downward cascade)
+    if (mongoConnected && docsCollection) {
+      await docsCollection.updateMany(
+        { setId: new ObjectId(itemId) },
+        { $addToSet: { sharedWith: new ObjectId(userToShare._id) } },
+      )
+    } else {
+      fallbackDocs.forEach((doc) => {
+        if (String(doc.setId) === String(itemId)) {
+          doc.sharedWith = doc.sharedWith || []
+          if (!doc.sharedWith.includes(String(userToShare._id))) {
+            doc.sharedWith.push(String(userToShare._id))
+          }
+        }
+      })
     }
+
     res.json({ message: 'Set shared successfully.' })
   } catch (error) {
     res.status(500).json({ message: 'Unable to share set.' })
   }
 })
+
 
 if (process.env.NODE_ENV === 'production') {
   const frontendDist = path.join(__dirname, '../build')

@@ -77,6 +77,7 @@ const Options = () => {
     }
     localStorage.removeItem('authToken')
     localStorage.removeItem('authUser')
+    localStorage.removeItem('userId')
     navigate('/login')
   }
 
