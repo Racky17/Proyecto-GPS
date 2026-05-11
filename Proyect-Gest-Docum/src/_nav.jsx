@@ -86,6 +86,11 @@ const _nav = [
     to: '/?shared=true',
     icon: <CIcon icon={cilShareAll} customClassName="nav-icon" />,
   },
+  {
+    component: 'CNavItem',
+    name: 'Documentos',
+    to: '/documentos',
+  },
 ]
 
 export default _nav
