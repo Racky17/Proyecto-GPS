@@ -17,7 +17,7 @@ const FormularioSubida = ({ onUploadSuccess }) => {
     formData.append('archivo', archivo)
 
     try {
-      const response = await fetch('http://localhost:3000/api/documentos/subir', {
+      const response = await fetch('http://localhost:4000/api/documentos/subir', {
         method: 'POST',
         body: formData, // Fetch ajusta los headers (multipart/form-data) automáticamente
       })

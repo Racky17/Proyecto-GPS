@@ -1,5 +1,5 @@
 import express from 'express'
-import { subirDocumento } from '../controllers/documentoController.js'
+import { subirDocumento } from '../controllerdocumentoController.js'
 import upload from '../modules/multermodule.js' // Tu módulo existente
 
 const router = express.Router()

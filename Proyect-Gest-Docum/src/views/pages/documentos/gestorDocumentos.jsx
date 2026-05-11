@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import FormularioSubida from '../../components/FormularioSubida' // Asegura la ruta correcta
+import FormularioSubida from '../../../components/pushFormulario' // Asegura la ruta correcta
 
 const GestorDocumentos = () => {
   const [mensajeExito, setMensajeExito] = useState('')

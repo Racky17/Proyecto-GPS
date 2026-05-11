@@ -1,4 +1,3 @@
-import documentoRoutes from './routes/documentoRoutes.js'
 require('dotenv').config()
 
 const express = require('express')
@@ -67,7 +66,6 @@ app.use(
   }),
 )
 app.use(express.json())
-app.use('/api/documentos', documentoRoutes)
 
 const createToken = (user) => {
   const id = user._id || user.id || user.username
