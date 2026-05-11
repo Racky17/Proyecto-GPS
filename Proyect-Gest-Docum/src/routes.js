@@ -17,10 +17,11 @@ import React from 'react'
 
 const Home = React.lazy(() => import('./views/pages/home/Home'))
 const Options = React.lazy(() => import('./views/pages/options/Options'))
+const GestorDocumentos = React.lazy(() => import('./views/documentos/GestorDocumentos'))
 
 export const routes = [
   { path: '/', exact: true, name: 'Home', element: Home },
   { path: '/options', exact: true, name: 'Options', element: Options },
+  { path: '/documentos', name: 'Gestión Documental', element: GestorDocumentos },
 ]
-
 export default routes
