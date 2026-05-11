@@ -17,7 +17,7 @@ import React from 'react'
 
 const Home = React.lazy(() => import('./views/pages/home/Home'))
 const Options = React.lazy(() => import('./views/pages/options/Options'))
-const GestorDocumentos = React.lazy(() => import('./views/documentos/GestorDocumentos'))
+const GestorDocumentos = React.lazy(() => import('./views/pages/documentos/GestorDocumentos'))
 
 export const routes = [
   { path: '/', exact: true, name: 'Home', element: Home },
