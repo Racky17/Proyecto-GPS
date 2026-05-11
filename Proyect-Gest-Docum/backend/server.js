@@ -1,3 +1,4 @@
+import documentoRoutes from './routes/documentoRoutes.js'
 require('dotenv').config()
 
 const express = require('express')
@@ -15,7 +16,12 @@ const MONGODB_DB = process.env.MONGODB_DB || 'proyecto_gps'
 const SALT_ROUNDS = 12
 
 const client = new MongoClient(MONGODB_URI)
-let usersCollection, docsCollection, foldersCollection, setsCollection, tagsCollection, userDocumentTagsCollection
+let usersCollection,
+  docsCollection,
+  foldersCollection,
+  setsCollection,
+  tagsCollection,
+  userDocumentTagsCollection
 let mongoConnected = false
 
 const fallbackUsers = [
@@ -43,22 +49,25 @@ const allowedOrigins = [
   'http://127.0.0.1:2200',
 ].filter(Boolean)
 
-app.use(cors({
-  origin(origin, callback) {
-    if (!origin) {
-      return callback(null, true)
-    }
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) {
+        return callback(null, true)
+      }
 
-    const localHostPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/
-    if (allowedOrigins.includes(origin) || localHostPattern.test(origin)) {
-      return callback(null, true)
-    }
+      const localHostPattern = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/
+      if (allowedOrigins.includes(origin) || localHostPattern.test(origin)) {
+        return callback(null, true)
+      }
 
-    callback(new Error(`CORS origin not allowed: ${origin}`))
-  },
-  credentials: true,
-}))
+      callback(new Error(`CORS origin not allowed: ${origin}`))
+    },
+    credentials: true,
+  }),
+)
 app.use(express.json())
+app.use('/api/documentos', documentoRoutes)
 
 const createToken = (user) => {
   const id = user._id || user.id || user.username
@@ -73,7 +82,7 @@ const getMasterKey = () => {
   const key = process.env.ENCRYPTION_KEY
   if (!key) {
     throw new Error(
-      'ENCRYPTION_KEY not set. Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
+      "ENCRYPTION_KEY not set. Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
     )
   }
   return Buffer.from(key, 'hex')
@@ -136,7 +145,9 @@ const shareFolderWithUser = async (folderId, userId) => {
       { $addToSet: { sharedWith: new ObjectId(userId) } },
     )
   }
-  const fallbackIndex = fallbackFolders.findIndex((folder) => String(folder._id) === String(folderId))
+  const fallbackIndex = fallbackFolders.findIndex(
+    (folder) => String(folder._id) === String(folderId),
+  )
   if (fallbackIndex >= 0) {
     fallbackFolders[fallbackIndex].sharedWith = fallbackFolders[fallbackIndex].sharedWith || []
     if (!fallbackFolders[fallbackIndex].sharedWith.includes(String(userId))) {
@@ -225,9 +236,7 @@ const findUserByIdAndUsername = async (id, username) => {
   if (mongoConnected && usersCollection) {
     return usersCollection.findOne({ _id: new ObjectId(id), username })
   }
-  return fallbackUsers.find(
-    (user) => String(user._id) === String(id) && user.username === username,
-  )
+  return fallbackUsers.find((user) => String(user._id) === String(id) && user.username === username)
 }
 
 const findUserByCredentials = async (value, password) => {
@@ -273,10 +282,7 @@ const findAccessibleFoldersForUser = async (userId) => {
   if (mongoConnected && foldersCollection) {
     return foldersCollection
       .find({
-        $or: [
-          { ownerId: new ObjectId(userId) },
-          { sharedWith: new ObjectId(userId) },
-        ],
+        $or: [{ ownerId: new ObjectId(userId) }, { sharedWith: new ObjectId(userId) }],
       })
       .toArray()
   }
@@ -292,10 +298,7 @@ const findAccessibleSetsForUser = async (userId) => {
   if (mongoConnected && setsCollection) {
     return setsCollection
       .find({
-        $or: [
-          { ownerId: new ObjectId(userId) },
-          { sharedWith: new ObjectId(userId) },
-        ],
+        $or: [{ ownerId: new ObjectId(userId) }, { sharedWith: new ObjectId(userId) }],
       })
       .toArray()
   }
@@ -515,10 +518,7 @@ app.get('/api/documents', async (req, res) => {
       })
     }
 
-    const docs = await docsCollection
-      .find({})
-      .limit(20)
-      .toArray()
+    const docs = await docsCollection.find({}).limit(20).toArray()
 
     res.json({ data: docs })
   } catch (error) {
@@ -533,7 +533,8 @@ app.post('/api/auth/register', async (req, res) => {
     return res.status(400).json({ message: 'Username, email, and password are required.' })
   }
 
-  const existing = await findUserByUsernameOrEmail(username) || await findUserByUsernameOrEmail(email)
+  const existing =
+    (await findUserByUsernameOrEmail(username)) || (await findUserByUsernameOrEmail(email))
   if (existing) {
     return res.status(409).json({ message: 'Username or email already exists.' })
   }
@@ -720,7 +721,11 @@ app.post('/api/user/documents', authenticate, upload.single('file'), async (req,
       }
     }
 
-    if (parentOwnerId && parentOwnerId !== String(req.user._id) && !sharedWith.includes(parentOwnerId)) {
+    if (
+      parentOwnerId &&
+      parentOwnerId !== String(req.user._id) &&
+      !sharedWith.includes(parentOwnerId)
+    ) {
       sharedWith.push(parentOwnerId)
     }
 
@@ -813,8 +818,14 @@ app.put('/api/user/documents/:id', authenticate, async (req, res) => {
 
   try {
     const existingDoc = mongoConnected
-      ? await docsCollection.findOne({ _id: new ObjectId(documentId), ownerId: new ObjectId(req.user._id) })
-      : fallbackDocs.find((doc) => String(doc._id) === String(documentId) && String(doc.ownerId) === String(req.user._id))
+      ? await docsCollection.findOne({
+          _id: new ObjectId(documentId),
+          ownerId: new ObjectId(req.user._id),
+        })
+      : fallbackDocs.find(
+          (doc) =>
+            String(doc._id) === String(documentId) && String(doc.ownerId) === String(req.user._id),
+        )
 
     if (!existingDoc) {
       return res.status(404).json({ message: 'Document not found.' })
@@ -872,8 +883,14 @@ app.put('/api/user/tags/:id', authenticate, async (req, res) => {
 
   try {
     const existingTag = mongoConnected
-      ? await tagsCollection.findOne({ _id: new ObjectId(tagId), ownerId: new ObjectId(req.user._id) })
-      : fallbackTags.find((tag) => String(tag._id) === String(tagId) && String(tag.ownerId) === String(req.user._id))
+      ? await tagsCollection.findOne({
+          _id: new ObjectId(tagId),
+          ownerId: new ObjectId(req.user._id),
+        })
+      : fallbackTags.find(
+          (tag) =>
+            String(tag._id) === String(tagId) && String(tag.ownerId) === String(req.user._id),
+        )
     if (!existingTag) {
       return res.status(404).json({ message: 'Tag not found.' })
     }
@@ -893,8 +910,14 @@ app.delete('/api/user/tags/:id', authenticate, async (req, res) => {
   const tagId = req.params.id
   try {
     const existingTag = mongoConnected
-      ? await tagsCollection.findOne({ _id: new ObjectId(tagId), ownerId: new ObjectId(req.user._id) })
-      : fallbackTags.find((tag) => String(tag._id) === String(tagId) && String(tag.ownerId) === String(req.user._id))
+      ? await tagsCollection.findOne({
+          _id: new ObjectId(tagId),
+          ownerId: new ObjectId(req.user._id),
+        })
+      : fallbackTags.find(
+          (tag) =>
+            String(tag._id) === String(tagId) && String(tag.ownerId) === String(req.user._id),
+        )
     if (!existingTag) {
       return res.status(404).json({ message: 'Tag not found.' })
     }
@@ -980,8 +1003,6 @@ app.post('/api/user/documents/:id/share', authenticate, async (req, res) => {
   }
 })
 
-
-
 app.post('/api/user/folders/:id/share', authenticate, async (req, res) => {
   const { targetEmail } = req.body
   if (!targetEmail) {
@@ -1038,7 +1059,6 @@ app.post('/api/user/folders/:id/share', authenticate, async (req, res) => {
     res.status(500).json({ message: 'Unable to share folder.' })
   }
 })
-
 
 app.post('/api/user/sets/:id/share', authenticate, async (req, res) => {
   const { targetEmail } = req.body
@@ -1108,7 +1128,6 @@ app.post('/api/user/sets/:id/share', authenticate, async (req, res) => {
     res.status(500).json({ message: 'Unable to share set.' })
   }
 })
-
 
 if (process.env.NODE_ENV === 'production') {
   const frontendDist = path.join(__dirname, '../build')
