@@ -83,7 +83,7 @@ const _nav = [
   {
     component: CNavItem,
     name: 'Shared Files',
-    to: '/?shared=true',
+    to: '/shared',
     icon: <CIcon icon={cilShareAll} customClassName="nav-icon" />,
   },
 ]

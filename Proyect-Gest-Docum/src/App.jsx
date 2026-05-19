@@ -16,7 +16,7 @@
 
 import React, { Suspense, useEffect } from 'react'
 import { HashRouter, Route, Routes } from 'react-router-dom'
-import { useSelector } from 'react-redux'
+import { useDispatch, useSelector } from 'react-redux'
 
 import { CSpinner, useColorModes } from '@coreui/react'
 import './scss/style.scss'
@@ -57,6 +57,7 @@ const PublicRoute = React.lazy(() => import('./components/PublicRoute'))
  * ReactDOM.render(<App />, document.getElementById('root'))
  */
 const App = () => {
+  const dispatch = useDispatch()
   const { isColorModeSet, setColorMode } = useColorModes('coreui-free-react-admin-template-theme')
   const storedTheme = useSelector((state) => state.theme)
 
@@ -65,9 +66,15 @@ const App = () => {
     const theme = urlParams.get('theme') && urlParams.get('theme').match(/^[A-Za-z0-9\s]+/)[0]
     if (theme) {
       setColorMode(theme)
+      dispatch({ type: 'set', theme })
+      return
     }
 
     if (isColorModeSet()) {
+      const persistedTheme = window.localStorage.getItem('coreui-free-react-admin-template-theme')
+      if (persistedTheme && persistedTheme !== storedTheme) {
+        dispatch({ type: 'set', theme: persistedTheme })
+      }
       return
     }
 

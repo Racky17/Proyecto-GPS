@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import PropTypes from 'prop-types'
 import { useDispatch } from 'react-redux'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import {
   CButton,
   CCard,
@@ -54,7 +54,6 @@ const Home = () => {
   const [showDocumentUploadModal, setShowDocumentUploadModal] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [selectedUploadFile, setSelectedUploadFile] = useState(null)
-  const [viewingShared, setViewingShared] = useState(false)
   const fileInputRef = useRef(null)
 
   const authToken = localStorage.getItem('authToken')
@@ -63,23 +62,6 @@ const Home = () => {
     ? String(authUser.id ?? authUser._id ?? authUser.userId ?? authUser.uid ?? '')
     : null
   const location = useLocation()
-  const navigate = useNavigate()
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    setViewingShared(params.get('shared') === 'true')
-  }, [location.search])
-
-  const sharedDocuments = useMemo(() => {
-    // Get documents that are shared with me but I don't own
-    if (!userIdFromStorage) return []
-    return documents.filter((doc) => {
-      const docSharedWith = Array.isArray(doc.sharedWith) ? doc.sharedWith.map(String) : []
-      const isSharedWithMe = docSharedWith.includes(userIdFromStorage)
-      const isNotMine = String(doc.ownerId) !== userIdFromStorage
-      return isSharedWithMe && isNotMine
-    })
-  }, [documents, userIdFromStorage])
 
   const selectedFolder = useMemo(
     () => folders.find((folder) => String(folder._id) === String(selected.id)),
@@ -732,8 +714,8 @@ const Home = () => {
         <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3 mb-4">
           <div>
             <h1 className="display-6 mb-0">
-              {viewingShared ? 'Shared with me' : currentBreadcrumb.map((crumb, index) => (
-                <span key={`${crumb.type}-${crumb.id || 'root'}`}> 
+              {currentBreadcrumb.map((crumb, index) => (
+                <span key={`${crumb.type}-${crumb.id || 'root'}`}>
                   {index > 0 && <span className="text-body-secondary">/</span>}{' '}
                   <CLink
                     href="#"
@@ -749,13 +731,11 @@ const Home = () => {
               ))}
             </h1>
             <div className="text-body-secondary">
-              {viewingShared 
-                ? 'Documents shared with you by other users.'
-                : 'Browse the current level and drill deeper by opening sets or folders.'}
+              Browse the current level and drill deeper by opening sets or folders.
             </div>
           </div>
           <div className="d-flex flex-wrap gap-2">
-            {!viewingShared && actionButtons.map((action) => (
+            {actionButtons.map((action) => (
               <CButton
                 key={action.type}
                 color="primary"
@@ -771,22 +751,10 @@ const Home = () => {
                 {action.label}
               </CButton>
             ))}
-            <CButton
-              color={viewingShared ? 'primary' : 'secondary'}
-              size="sm"
-              className="rounded-pill px-3"
-              onClick={() => {
-                const nextViewingShared = !viewingShared
-                setViewingShared(nextViewingShared)
-                navigate(`/?shared=${nextViewingShared ? 'true' : 'false'}`, { replace: true })
-              }}
-            >
-              {viewingShared ? 'Back to My Files' : 'View Shared Files'}
-            </CButton>
           </div>
         </div>
 
-        {!viewingShared && currentLocation.type !== 'root' && (
+        {currentLocation.type !== 'root' && (
           <div className="mb-4">
             <CButton color="secondary" size="sm" className="rounded-pill px-3" onClick={handleGoBack}>
               <CIcon icon={cilArrowLeft} className="me-2" />
@@ -811,7 +779,7 @@ const Home = () => {
               Drag a file into the area below, or choose one from your computer.
             </div>
             <div
-              className={`rounded-4 border border-2 p-4 text-center ${
+              className={`rounded-4 border-2 p-4 text-center ${
                 dragActive ? 'border-primary bg-primary bg-opacity-10' : 'border-body-secondary'
               }`}
               style={{ minHeight: '200px', cursor: 'pointer' }}
@@ -854,41 +822,6 @@ const Home = () => {
           <CCardBody>
             {loading ? (
               <div className="text-center text-body-secondary">Loading your document structure...</div>
-            ) : viewingShared ? (
-              // Shared Files View
-              sharedDocuments.length === 0 ? (
-                <div className="text-center text-body-secondary">No documents have been shared with you yet.</div>
-              ) : (
-                <CRow className="g-3">
-                  {sharedDocuments.map((doc) => {
-                    const isSelected = selected.type === 'document' && String(selected.id) === String(doc._id)
-                    return (
-                      <CCol xs={12} sm={6} lg={4} key={doc._id}>
-                        <div
-                          className={`h-100 d-flex flex-column p-3 rounded-4 ${
-                            isSelected ? 'bg-primary text-white' : 'bg-body border border-body-secondary'
-                          }`}
-                          style={{ cursor: 'pointer' }}
-                          onClick={() => handleSelectDocument(doc)}
-                          onDoubleClick={() => downloadDocument(doc)}
-                        >
-                          <div className="d-flex align-items-start gap-2 mb-3">
-                            <CIcon icon={cilFile} className="fs-4" />
-                            <div>
-                              <div className="fw-semibold">{doc.title}</div>
-                              <div className="text-body-secondary small">
-                                From: <strong>{doc.ownerName || 'Unknown'}</strong>
-                              </div>
-                              {renderTagMarkers(doc)}
-                            </div>
-                          </div>
-                          <div className="mt-auto">{renderItemActions('document', doc)}</div>
-                        </div>
-                      </CCol>
-                    )
-                  })}
-                </CRow>
-              )
             ) : sets.length === 0 ? (
               <div className="text-center text-body-secondary">No sets yet. Create your first set to start organizing folders and documents.</div>
             ) : (
