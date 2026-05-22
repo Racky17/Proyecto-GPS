@@ -15,12 +15,13 @@ import CIcon from '@coreui/icons-react'
 import { cilLibrary, cilTag } from '@coreui/icons'
 
 import { AppSidebarNav } from './AppSidebarNav'
+import { useLanguage } from '../i18n'
 
 import { logo } from 'src/assets/brand/logo'
 import { sygnet } from 'src/assets/brand/sygnet'
 
 // sidebar nav config
-import navigation from '../_nav'
+import { getNavigation } from '../_nav'
 
 /**
  * AppSidebar functional component
@@ -40,7 +41,7 @@ const AppSidebar = () => {
   const sidebarShow = useSelector((state) => state.sidebarShow)
   const [sets, setSets] = useState([])
   const [tags, setTags] = useState([])
-
+  const { t } = useLanguage()
   const currentUser = React.useMemo(() => {
     try {
       return JSON.parse(localStorage.getItem('authUser') || 'null')
@@ -77,11 +78,13 @@ const AppSidebar = () => {
     loadSidebarData()
   }, [])
 
+  const translatedNavigation = useMemo(() => getNavigation(t), [t])
+
   const sidebarItems = useMemo(() => {
-    const items = [...navigation]
+    const items = [...translatedNavigation]
 
     if (sets.length > 0) {
-      items.push({ component: CNavTitle, name: 'Document Sets:' })
+      items.push({ component: CNavTitle, name: t('sbar_sets') })
       sets.forEach((setItem) => {
         items.push({
           component: CNavItem,
@@ -99,7 +102,7 @@ const AppSidebar = () => {
     }
 
     if (tags.length > 0) {
-      items.push({ component: CNavTitle, name: 'Document Tags:' })
+      items.push({ component: CNavTitle, name: t('sbar_tags') })
       tags.forEach((tag) => {
         items.push({
           component: CNavItem,
@@ -143,9 +146,9 @@ const AppSidebar = () => {
       </CSidebarHeader>
 
       <div className="sidebar-user px-3 py-3 border-bottom text-white">
-        <div className="text-uppercase small text-secondary">User</div>
-        <div className="fw-semibold text-truncate" title={currentUser?.email || 'Not signed in'}>
-          {currentUser?.email || 'Not signed in'}
+        <div className="text-uppercase small text-secondary text-truncate">{t('sbar_user')}</div>
+        <div className="fw-semibold text-truncate" title={currentUser?.email || t('sbar_userNotSigned')}>
+          {currentUser?.email || t('sbar_userNotSigned')}
         </div>
       </div>
 

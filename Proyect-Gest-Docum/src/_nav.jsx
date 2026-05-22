@@ -15,12 +15,13 @@ import CIcon from '@coreui/icons-react'
 import { cilFolderOpen, cilHome, cilLibrary, cilSettings, cilShareAll, cilTag } from '@coreui/icons'
 import { CNavItem, CNavTitle } from '@coreui/react'
 
+
 /**
  * Navigation menu structure array
  *
  * @type {Array<Object>}
  * @property {React.ComponentType} component - CoreUI nav component (CNavItem, CNavGroup, CNavTitle)
- * @property {string} name - Display text for the nav item
+ * @property {string} namekey - Translation key for the display text
  * @property {string} [to] - Internal route path (for CNavItem with routing)
  * @property {string} [href] - External URL (for CNavItem with external links)
  * @property {React.ReactNode} [icon] - Icon element to display
@@ -28,64 +29,38 @@ import { CNavItem, CNavTitle } from '@coreui/react'
  * @property {string} badge.color - Badge color (info, danger, success, etc.)
  * @property {string} badge.text - Badge text content
  * @property {Array<Object>} [items] - Child items for CNavGroup
- *
- * @example
- * // Simple navigation item
- * {
- *   component: CNavItem,
- *   name: 'Dashboard',
- *   to: '/dashboard',
- *   icon: <CIcon icon={cilSpeedometer} customClassName="nav-icon" />,
- * }
- *
- * @example
- * // Navigation group with children
- * {
- *   component: CNavGroup,
- *   name: 'Base',
- *   to: '/base',
- *   icon: <CIcon icon={cilPuzzle} customClassName="nav-icon" />,
- *   items: [
- *     {
- *       component: CNavItem,
- *       name: 'Cards',
- *       to: '/base/cards',
- *     },
- *   ],
- * }
- *
- * @example
- * // Section title
- * {
- *   component: CNavTitle,
- *   name: 'Theme',
- * }
  */
-const _nav = [
+const navigationConfig = [
   {
     component: CNavItem,
-    name: 'Home screen',
+    namekey: 'sbar_home',
     to: '/',
     icon: <CIcon icon={cilHome} customClassName="nav-icon" />,
   },
   {
     component: CNavItem,
-    name: 'Configuration',
+    namekey: 'sbar_options',
     to: '/options',
     icon: <CIcon icon={cilSettings} customClassName="nav-icon" />,
   },
   {
     component: CNavItem,
-    name: 'Recent Files',
+    namekey: 'sbar_recent',
     to: '/',
     icon: <CIcon icon={cilFolderOpen} customClassName="nav-icon" />,
   },
   {
     component: CNavItem,
-    name: 'Shared Files',
+    namekey: 'sbar_shared',
     to: '/shared',
     icon: <CIcon icon={cilShareAll} customClassName="nav-icon" />,
   },
 ]
 
-export default _nav
+export const getNavigation = (t) =>
+  navigationConfig.map((item) => ({
+    ...item,
+    name: item.namekey ? t(item.namekey) : item.name,
+  }))
+
+export default navigationConfig

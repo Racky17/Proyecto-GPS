@@ -14,6 +14,7 @@ import {
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilArrowLeft, cilFile, cilSearch } from '@coreui/icons'
+import { useLanguage } from '../../../i18n'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 
@@ -27,6 +28,7 @@ const Shared = () => {
   const [selected, setSelected] = useState({ type: null, id: null })
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const { t } = useLanguage()
 
   const authToken = localStorage.getItem('authToken')
   const authUser = JSON.parse(localStorage.getItem('authUser') || 'null')
@@ -399,8 +401,8 @@ const Shared = () => {
       <CCol>
         <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3 mb-4">
           <div>
-            <h1 className="display-6 mb-0">Shared with me</h1>
-            <div className="text-body-secondary">Documents shared with you by other users.</div>
+            <h1 className="display-6 mb-0">{t('shar_title')}</h1>
+            <div className="text-body-secondary">{t('shar_desc')}</div>
           </div>
           <div className="d-flex flex-wrap gap-2">
             <CButton
@@ -410,7 +412,7 @@ const Shared = () => {
               onClick={() => navigate('/')}
             >
               <CIcon icon={cilArrowLeft} className="me-2" />
-              My Files
+              {t('shar_goBack')}
             </CButton>
           </div>
         </div>
@@ -425,9 +427,9 @@ const Shared = () => {
         <CCard className="bg-body-secondary rounded-4 p-4 mb-4">
           <CCardBody>
             {loading ? (
-              <div className="text-center text-body-secondary">Loading shared documents...</div>
+              <div className="text-center text-body-secondary">{t('shar_loading')}</div>
             ) : sharedDocuments.length === 0 ? (
-              <div className="text-center text-body-secondary">No documents have been shared with you yet.</div>
+              <div className="text-center text-body-secondary">{t('shar_noDocs')}</div>
             ) : (
               <CRow className="g-3">
                 {sharedDocuments.map((doc) => {
@@ -447,7 +449,7 @@ const Shared = () => {
                           <div>
                             <div className="fw-semibold">{doc.title}</div>
                             <div className="text-body-secondary small">
-                              From: <strong>{doc.ownerName || 'Unknown'}</strong>
+                              {t('shar_from')} <strong>{doc.ownerName || t('shar_unknown')}</strong>
                             </div>
                             {renderTagMarkers(doc)}
                           </div>

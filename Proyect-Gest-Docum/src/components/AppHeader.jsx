@@ -3,11 +3,13 @@ import { useDispatch, useSelector } from 'react-redux'
 import { CButton, useColorModes } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilMenu, cilMoon, cilSun } from '@coreui/icons'
+import { useLanguage } from '../i18n'
 
 const AppHeader = () => {
   const dispatch = useDispatch()
   const currentTheme = useSelector((state) => state.theme)
   const { setColorMode } = useColorModes('coreui-free-react-admin-template-theme')
+  const { t } = useLanguage()
 
   const handleToggleTheme = () => {
     const nextTheme = currentTheme === 'dark' ? 'light' : 'dark'
@@ -34,7 +36,7 @@ const AppHeader = () => {
         onClick={handleToggleTheme}
       >
         <CIcon icon={isDarkMode ? cilSun : cilMoon} className="me-2" />
-        {isDarkMode ? 'Light' : 'Dark'}
+        {isDarkMode ? t('hder_light') : t('hder_dark')}
       </CButton>
     </div>
   )

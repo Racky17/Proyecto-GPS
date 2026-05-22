@@ -11,6 +11,7 @@ import {
   CFormInput,
   CRow,
 } from '@coreui/react'
+import { useLanguage } from '../../../i18n'
 
 const Options = () => {
   const navigate = useNavigate()
@@ -24,6 +25,9 @@ const Options = () => {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
+  const { language, setLanguage, t } = useLanguage()
+  const [languageMessage, setLanguageMessage] = useState('')
+
   const currentUser = useMemo(() => {
     try {
       return JSON.parse(localStorage.getItem('authUser') || 'null')
@@ -34,6 +38,12 @@ const Options = () => {
 
   const authToken = localStorage.getItem('authToken')
   const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+
+  const handleLanguageChange = (event) => {
+    const selectedLanguage = event.target.value
+    setLanguage(selectedLanguage)
+    setLanguageMessage(t('opt_languageSaved'))
+  }
 
   useEffect(() => {
     const loadTags = async () => {
@@ -217,27 +227,47 @@ const Options = () => {
         <CRow className="justify-content-center">
           <CCol md={8} lg={6}>
             <CCard className="mb-4">
-              <CCardHeader>Options</CCardHeader>
+              <CCardHeader>{t('opt_title')}</CCardHeader>
               <CCardBody>
                 <div className="mb-4">
-                  <p className="mb-1">Signed in as:</p>
-                  <strong>{currentUser?.email || 'Unknown user'}</strong>
+                  <p className="mb-1">{t('opt_signeduser')}</p>
+                  <strong>{currentUser?.email || t('opt_unknownuser')}</strong>
                 </div>
                 <p className="text-muted mb-4">
-                  Use this page to manage your account session and logout.
+                  {t('opt_optionsdesc')}
                 </p>
                 <div className="d-flex gap-2">
                   <CButton color="danger" onClick={handleLogout}>
-                    Log out
+                    {t('opt_logout')}
                   </CButton>
                 </div>
               </CCardBody>
             </CCard>
+            <CCard className="mb-4">
+              <CCardHeader>{t('opt_language')}</CCardHeader>
+              <CCardBody>
+                <p className="text-muted mb-3">{t('opt_selectLanguage')}</p>
+                <div className="mb-3">
+                  <label className="form-label">{t('opt_currentLanguage')}</label>
+                  <select
+                    className="form-select"
+                    value={language}
+                    onChange={handleLanguageChange}
+                  >
+                    <option value="en">{t('opt_english')}</option>
+                    <option value="es">{t('opt_spanish')}</option>
+                  </select>
+                </div>
+                {languageMessage && (
+                  <div className="small text-success">{languageMessage}</div>
+                )}
+              </CCardBody>
+            </CCard>
             <CCard>
-              <CCardHeader>Manage Tags</CCardHeader>
+              <CCardHeader>{t('opt_manageTags')}</CCardHeader>
               <CCardBody>
                 <p className="text-muted mb-4">
-                  Create, edit, and delete tags for your documents. Tags are private to your account.
+                  {t('opt_tagsDesc')}
                 </p>
                 {error && <div className="mb-3 text-danger">{error}</div>}
                 {message && <div className="mb-3 text-success">{message}</div>}
@@ -245,7 +275,7 @@ const Options = () => {
                   <div className="d-flex flex-column gap-3 mb-4">
                     <div className="d-flex gap-2 align-items-center">
                       <CFormInput
-                        placeholder="Tag name"
+                        placeholder={t('opt_tagsPlaceholder')}
                         value={editingTagId ? editingTagName : newTagName}
                         onChange={(e) =>
                           editingTagId ? setEditingTagName(e.target.value) : setNewTagName(e.target.value)
@@ -262,22 +292,22 @@ const Options = () => {
                     </div>
                     <div className="d-flex gap-2">
                       <CButton color="primary" type="submit">
-                        {editingTagId ? 'Save Tag' : 'Create Tag'}
+                        {editingTagId ? t('opt_tagsSave') : t('opt_tagsCreate')}
                       </CButton>
                       {editingTagId && (
                         <CButton color="secondary" type="button" onClick={handleCancelEdit}>
-                          Cancel
+                          {t('opt_tagsCancel')}
                         </CButton>
                       )}
                     </div>
                   </div>
                 </CForm>
                 <div>
-                  <h5 className="mb-3">Your Tags</h5>
+                  <h5 className="mb-3">{t('opt_tagsYour')}</h5>
                   {loadingTags ? (
-                    <p className="text-body-secondary">Loading tags...</p>
+                    <p className="text-body-secondary">{t('opt_tagsLoading')}</p>
                   ) : tags.length === 0 ? (
-                    <p className="text-muted">No tags yet. Add one to organize your documents.</p>
+                    <p className="text-muted">{t('opt_tagsEmpty')}</p>
                   ) : (
                     <ul className="list-unstyled mb-0">
                       {tags.map((tag) => (
@@ -302,14 +332,14 @@ const Options = () => {
                           </div>
                           <div className="d-flex gap-2">
                             <CButton size="sm" color="secondary" onClick={() => handleEditTag(tag)}>
-                              Edit
+                              {t('opt_tagsEdit')}
                             </CButton>
                             <CButton
                               size="sm"
                               color="danger"
                               onClick={() => handleDeleteTag(tag._id)}
                             >
-                              Delete
+                              {t('opt_tagsDelete')}
                             </CButton>
                           </div>
                         </li>

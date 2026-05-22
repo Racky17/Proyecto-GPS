@@ -29,17 +29,21 @@ import {
   cilTag,
   cilPlus,
 } from '@coreui/icons'
+import { useLanguage } from '../../../i18n'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 
-const actionButtons = [
-  { label: 'New Set', type: 'set' },
-  { label: 'Add Folder', type: 'folder' },
-  { label: 'Add Document', type: 'document' },
-]
-
 const Home = () => {
   const dispatch = useDispatch()
+  const { t } = useLanguage()
+  const actionButtons = useMemo(
+    () => [
+      { label: t('home_newSet'), type: 'set' },
+      { label: t('home_newFolder'), type: 'folder' },
+      { label: t('home_newDoc'), type: 'document' },
+    ],
+    [t],
+  )
   const [sets, setSets] = useState([])
   const [folders, setFolders] = useState([])
   const [documents, setDocuments] = useState([])
@@ -284,7 +288,7 @@ const Home = () => {
             )
           }}
         >
-          Tag
+          {t('home_tagButton')}
         </CButton>
       </CPopover>
     )
@@ -337,7 +341,7 @@ const Home = () => {
           shareItem(type, item)
         }}
       >
-        Share
+        {t('home_shareButton')}
       </CButton>
       {type === 'document' ? renderTagPopover(item) : null}
       <CButton
@@ -670,7 +674,7 @@ const Home = () => {
   }, [documents])
 
   const currentBreadcrumb = useMemo(() => {
-    const crumbs = [{ label: 'Home', type: 'root', id: null }]
+    const crumbs = [{ label: t('home_home'), type: 'root', id: null }]
     if (currentSet) {
       crumbs.push({ label: currentSet.title, type: 'set', id: currentSet._id })
     }
@@ -731,7 +735,7 @@ const Home = () => {
               ))}
             </h1>
             <div className="text-body-secondary">
-              Browse the current level and drill deeper by opening sets or folders.
+              {t('home_topDesc')}
             </div>
           </div>
           <div className="d-flex flex-wrap gap-2">
@@ -758,11 +762,12 @@ const Home = () => {
           <div className="mb-4">
             <CButton color="secondary" size="sm" className="rounded-pill px-3" onClick={handleGoBack}>
               <CIcon icon={cilArrowLeft} className="me-2" />
-              Back
+              {t('home_backButton')}
             </CButton>
           </div>
         )}
 
+        {/* TODO: Adaptar busqueda a un componente o vista aparte */}
         <CInputGroup className="mb-4 rounded-pill overflow-hidden border border-1 border-body-secondary">
           <CInputGroupText className="bg-body-secondary border-0 text-body-secondary">
             <CIcon icon={cilSearch} />
@@ -772,11 +777,11 @@ const Home = () => {
 
         <CModal visible={showDocumentUploadModal} size="lg" onClose={handleCloseDocumentUploadModal} backdrop="static">
           <CModalHeader>
-            <CModalTitle>Upload a Document</CModalTitle>
+            <CModalTitle>{t('home_uploadHeader')}</CModalTitle>
           </CModalHeader>
           <CModalBody>
             <div className="mb-4 text-body-secondary">
-              Drag a file into the area below, or choose one from your computer.
+              {t('home_uploadDesc')}
             </div>
             <div
               className={`rounded-4 border-2 p-4 text-center ${
@@ -789,10 +794,10 @@ const Home = () => {
               onClick={() => fileInputRef.current?.click()}
             >
               <div className="h-100 d-flex flex-column align-items-center justify-content-center gap-3">
-                <div className="fw-semibold">Drop a file here</div>
-                <div className="text-body-secondary">or</div>
+                <div className="fw-semibold">{t('home_uploadDropfile')}</div>
+                <div className="text-body-secondary">{t('home_uploadOr')}</div>
                 <CButton color="secondary" size="sm" onClick={(event) => { event.stopPropagation(); fileInputRef.current?.click() }}>
-                  Choose a file
+                  {t('home_uploadChoose')}
                 </CButton>
                 <input
                   type="file"
@@ -801,7 +806,7 @@ const Home = () => {
                   onChange={handleFileInputChange}
                 />
                 {selectedUploadFile ? (
-                  <div className="text-body-secondary small">Selected file: {selectedUploadFile.name}</div>
+                  <div className="text-body-secondary small">{t('home_uploadChosen')}{selectedUploadFile.name}</div>
                 ) : (
                   <div className="text-body-secondary small">Work in progress</div>
                 )}
@@ -810,10 +815,10 @@ const Home = () => {
           </CModalBody>
           <CModalFooter>
             <CButton color="secondary" onClick={handleCloseDocumentUploadModal}>
-              Cancel
+              {t('home_cancel')}
             </CButton>
             <CButton color="primary" onClick={handleUploadDocument}>
-              Upload document
+              {t('home_uploadButton')}
             </CButton>
           </CModalFooter>
         </CModal>
@@ -821,9 +826,9 @@ const Home = () => {
         <CCard className="bg-body-secondary rounded-4 p-4 mb-4">
           <CCardBody>
             {loading ? (
-              <div className="text-center text-body-secondary">Loading your document structure...</div>
+              <div className="text-center text-body-secondary">{t('home_loading')}</div>
             ) : sets.length === 0 ? (
-              <div className="text-center text-body-secondary">No sets yet. Create your first set to start organizing folders and documents.</div>
+              <div className="text-center text-body-secondary">{t('home_emptySet')}</div>
             ) : (
               <>
                 {currentLocation.type === 'root' && (
@@ -910,7 +915,7 @@ const Home = () => {
                           })}
                       </CRow>
                     ) : (
-                      <div className="text-body-secondary">No folders or documents available in this set.</div>
+                      <div className="text-body-secondary">{t('home_emptyFold')}</div>
                     )}
                   </>
                 )}
@@ -945,7 +950,7 @@ const Home = () => {
                         })}
                       </CRow>
                     ) : (
-                      <div className="text-body-secondary">No documents available in this folder.</div>
+                      <div className="text-body-secondary">{t('home_emptyFold2')}</div>
                     )}
                   </>
                 )}
