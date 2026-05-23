@@ -12,7 +12,7 @@
 
 import React from 'react'
 import CIcon from '@coreui/icons-react'
-import { cilFolderOpen, cilHome, cilLibrary, cilSettings, cilShareAll, cilTag } from '@coreui/icons'
+import { cilFolderOpen, cilHome, cilLibrary, cilSettings, cilShareAll, cilTag, cilBuilding} from '@coreui/icons'
 import { CNavItem, CNavTitle } from '@coreui/react'
 
 
@@ -42,6 +42,12 @@ const navigationConfig = [
     namekey: 'sbar_options',
     to: '/options',
     icon: <CIcon icon={cilSettings} customClassName="nav-icon" />,
+  },
+  {
+    component: CNavItem,
+    namekey: 'sbar_org',
+    to: '/organizations',
+    icon: <CIcon icon={cilBuilding} customClassName="nav-icon" />,
   },
   {
     component: CNavItem,

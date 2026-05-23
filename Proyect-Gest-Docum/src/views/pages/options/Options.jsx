@@ -222,137 +222,135 @@ const Options = () => {
   }
 
   return (
-    <div className="bg-body-tertiary min-vh-100 d-flex flex-column align-items-center py-4">
-      <CContainer>
-        <CRow className="justify-content-center">
-          <CCol md={8} lg={6}>
-            <CCard className="mb-4">
-              <CCardHeader>{t('opt_title')}</CCardHeader>
-              <CCardBody>
-                <div className="mb-4">
-                  <p className="mb-1">{t('opt_signeduser')}</p>
-                  <strong>{currentUser?.email || t('opt_unknownuser')}</strong>
-                </div>
-                <p className="text-muted mb-4">
-                  {t('opt_optionsdesc')}
-                </p>
-                <div className="d-flex gap-2">
-                  <CButton color="danger" onClick={handleLogout}>
-                    {t('opt_logout')}
-                  </CButton>
-                </div>
-              </CCardBody>
-            </CCard>
-            <CCard className="mb-4">
-              <CCardHeader>{t('opt_language')}</CCardHeader>
-              <CCardBody>
-                <p className="text-muted mb-3">{t('opt_selectLanguage')}</p>
-                <div className="mb-3">
-                  <label className="form-label">{t('opt_currentLanguage')}</label>
-                  <select
-                    className="form-select"
-                    value={language}
-                    onChange={handleLanguageChange}
-                  >
-                    <option value="en">{t('opt_english')}</option>
-                    <option value="es">{t('opt_spanish')}</option>
-                  </select>
-                </div>
-                {languageMessage && (
-                  <div className="small text-success">{languageMessage}</div>
-                )}
-              </CCardBody>
-            </CCard>
-            <CCard>
-              <CCardHeader>{t('opt_manageTags')}</CCardHeader>
-              <CCardBody>
-                <p className="text-muted mb-4">
-                  {t('opt_tagsDesc')}
-                </p>
-                {error && <div className="mb-3 text-danger">{error}</div>}
-                {message && <div className="mb-3 text-success">{message}</div>}
-                <CForm onSubmit={editingTagId ? handleUpdateTag : handleAddTag}>
-                  <div className="d-flex flex-column gap-3 mb-4">
-                    <div className="d-flex gap-2 align-items-center">
-                      <CFormInput
-                        placeholder={t('opt_tagsPlaceholder')}
-                        value={editingTagId ? editingTagName : newTagName}
-                        onChange={(e) =>
-                          editingTagId ? setEditingTagName(e.target.value) : setNewTagName(e.target.value)
-                        }
-                      />
-                      <input
-                        type="color"
-                        value={editingTagId ? editingTagColor : newTagColor}
-                        onChange={(e) =>
-                          editingTagId ? setEditingTagColor(e.target.value) : setNewTagColor(e.target.value)
-                        }
-                        style={{ width: '3rem', height: '2.5rem', border: 'none', padding: 0 }}
-                      />
-                    </div>
-                    <div className="d-flex gap-2">
-                      <CButton color="primary" type="submit">
-                        {editingTagId ? t('opt_tagsSave') : t('opt_tagsCreate')}
-                      </CButton>
-                      {editingTagId && (
-                        <CButton color="secondary" type="button" onClick={handleCancelEdit}>
-                          {t('opt_tagsCancel')}
-                        </CButton>
-                      )}
-                    </div>
+    <CContainer>
+      <CRow className="justify-content-center">
+        <CCol md={8} lg={6}>
+          <CCard className="mb-4">
+            <CCardHeader>{t('opt_title')}</CCardHeader>
+            <CCardBody>
+              <div className="mb-4">
+                <p className="mb-1">{t('opt_signeduser')}</p>
+                <strong>{currentUser?.email || t('opt_unknownuser')}</strong>
+              </div>
+              <p className="text-muted mb-4">
+                {t('opt_optionsdesc')}
+              </p>
+              <div className="d-flex flex-wrap gap-2">
+                <CButton color="danger" onClick={handleLogout}>
+                  {t('opt_logout')}
+                </CButton>
+              </div>
+            </CCardBody>
+          </CCard>
+          <CCard className="mb-4">
+            <CCardHeader>{t('opt_language')}</CCardHeader>
+            <CCardBody>
+              <p className="text-muted mb-3">{t('opt_selectLanguage')}</p>
+              <div className="mb-3">
+                <label className="form-label">{t('opt_currentLanguage')}</label>
+                <select
+                  className="form-select"
+                  value={language}
+                  onChange={handleLanguageChange}
+                >
+                  <option value="en">{t('opt_english')}</option>
+                  <option value="es">{t('opt_spanish')}</option>
+                </select>
+              </div>
+              {languageMessage && (
+                <div className="small text-success">{languageMessage}</div>
+              )}
+            </CCardBody>
+          </CCard>
+          <CCard>
+            <CCardHeader>{t('opt_manageTags')}</CCardHeader>
+            <CCardBody>
+              <p className="text-muted mb-4">
+                {t('opt_tagsDesc')}
+              </p>
+              {error && <div className="mb-3 text-danger">{error}</div>}
+              {message && <div className="mb-3 text-success">{message}</div>}
+              <CForm onSubmit={editingTagId ? handleUpdateTag : handleAddTag}>
+                <div className="d-flex flex-column gap-3 mb-4">
+                  <div className="d-flex flex-wrap gap-2 align-items-center">
+                    <CFormInput
+                      placeholder={t('opt_tagsPlaceholder')}
+                      value={editingTagId ? editingTagName : newTagName}
+                      onChange={(e) =>
+                        editingTagId ? setEditingTagName(e.target.value) : setNewTagName(e.target.value)
+                      }
+                    />
+                    <input
+                      type="color"
+                      value={editingTagId ? editingTagColor : newTagColor}
+                      onChange={(e) =>
+                        editingTagId ? setEditingTagColor(e.target.value) : setNewTagColor(e.target.value)
+                      }
+                      style={{ width: '3rem', height: '2.5rem', border: 'none', padding: 0 }}
+                    />
                   </div>
-                </CForm>
-                <div>
-                  <h5 className="mb-3">{t('opt_tagsYour')}</h5>
-                  {loadingTags ? (
-                    <p className="text-body-secondary">{t('opt_tagsLoading')}</p>
-                  ) : tags.length === 0 ? (
-                    <p className="text-muted">{t('opt_tagsEmpty')}</p>
-                  ) : (
-                    <ul className="list-unstyled mb-0">
-                      {tags.map((tag) => (
-                        <li
-                          key={String(tag._id)}
-                          className="d-flex align-items-center justify-content-between rounded-3 bg-body border border-body-secondary p-3 mb-2"
-                        >
-                          <div className="d-flex align-items-center gap-3">
-                            <span
-                              style={{
-                                width: '18px',
-                                height: '18px',
-                                borderRadius: '50%',
-                                backgroundColor: tag.color || '#0d6efd',
-                                display: 'inline-block',
-                              }}
-                            />
-                            <div>
-                              <strong>{tag.name}</strong>
-                              <div className="text-body-secondary small">{tag.color}</div>
-                            </div>
-                          </div>
-                          <div className="d-flex gap-2">
-                            <CButton size="sm" color="secondary" onClick={() => handleEditTag(tag)}>
-                              {t('opt_tagsEdit')}
-                            </CButton>
-                            <CButton
-                              size="sm"
-                              color="danger"
-                              onClick={() => handleDeleteTag(tag._id)}
-                            >
-                              {t('opt_tagsDelete')}
-                            </CButton>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <div className="d-flex flex-wrap gap-2">
+                    <CButton color="primary" type="submit">
+                      {editingTagId ? t('opt_tagsSave') : t('opt_tagsCreate')}
+                    </CButton>
+                    {editingTagId && (
+                      <CButton color="secondary" type="button" onClick={handleCancelEdit}>
+                        {t('opt_tagsCancel')}
+                      </CButton>
+                    )}
+                  </div>
                 </div>
-              </CCardBody>
-            </CCard>
-          </CCol>
-        </CRow>
-      </CContainer>
-    </div>
+              </CForm>
+              <div>
+                <h5 className="mb-3">{t('opt_tagsYour')}</h5>
+                {loadingTags ? (
+                  <p className="text-body-secondary">{t('opt_tagsLoading')}</p>
+                ) : tags.length === 0 ? (
+                  <p className="text-muted">{t('opt_tagsEmpty')}</p>
+                ) : (
+                  <ul className="list-unstyled mb-0">
+                    {tags.map((tag) => (
+                      <li
+                        key={String(tag._id)}
+                        className="d-flex flex-column flex-sm-row align-items-start align-items-sm-center justify-content-between rounded-3 bg-body border border-body-secondary p-3 mb-2"
+                      >
+                        <div className="d-flex align-items-center gap-3">
+                          <span
+                            style={{
+                              width: '18px',
+                              height: '18px',
+                              borderRadius: '50%',
+                              backgroundColor: tag.color || '#0d6efd',
+                              display: 'inline-block',
+                            }}
+                          />
+                          <div>
+                            <strong>{tag.name}</strong>
+                            <div className="text-body-secondary small">{tag.color}</div>
+                          </div>
+                        </div>
+                        <div className="d-flex gap-2 mt-2 mt-sm-0">
+                          <CButton size="sm" color="secondary" onClick={() => handleEditTag(tag)}>
+                            {t('opt_tagsEdit')}
+                          </CButton>
+                          <CButton
+                            size="sm"
+                            color="danger"
+                            onClick={() => handleDeleteTag(tag._id)}
+                          >
+                            {t('opt_tagsDelete')}
+                          </CButton>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </CCardBody>
+          </CCard>
+        </CCol>
+      </CRow>
+    </CContainer>
   )
 }
 

@@ -36,6 +36,7 @@ const translations = {
     sbar_options: 'Configuration',
     sbar_sets: 'Document Sets',
     sbar_tags: 'Document Tags',
+    sbar_org: 'Organizations',
 
     hder_light: 'Light',
     hder_dark: 'Dark',
@@ -70,6 +71,21 @@ const translations = {
     shar_unknown: 'Unknown',
     shar_loading: 'Loading shared documents...',
     shar_noDocs: 'No documents have been shared with you yet.',
+
+    org_title: 'Organizations',
+    org_desc: 'Manage organizations and members',
+    org_new: 'New Organization Name',
+    org_create: 'Create Organization',
+    org_yourOrgs: 'Your Organizations',
+    org_loadingOrgs: 'Loading organizations...',
+    org_noOrgs: 'You are not a member of any organizations yet.',
+    org_owner: 'Owner: ',
+    org_hide: 'Hide',
+    org_manage: 'Manage',
+    org_members: 'Members',
+    org_membEmail: 'Member email or organization ID',
+    org_selRole: 'Select role',
+    org_add: 'Add',
   },
   es: {
     opt_title: 'Opciones',
@@ -103,6 +119,7 @@ const translations = {
     sbar_options: 'Configuración',
     sbar_sets: 'Proyectos',
     sbar_tags: 'Etiquetas',
+    sbar_org: 'Organizaciones',
 
     hder_light: 'Claro',
     hder_dark: 'Oscuro',
@@ -137,6 +154,22 @@ const translations = {
     shar_unknown: 'Desconocido',
     shar_loading: 'Cargando documentos compartidos...',
     shar_noDocs: 'No documentos han sido compartidos contigo aún.',
+
+
+    org_title: 'Organizaciones',
+    org_desc: 'Administrar organizaciones y miembros',
+    org_new: 'Nombre de nueva organización',
+    org_create: 'Crear Organización',
+    org_yourOrgs: 'Tus Organizaciones',
+    org_loadingOrgs: 'Cargando organizaciones...',
+    org_noOrgs: 'No eres miembro de organizaciones.',
+    org_owner: 'Propietario: ',
+    org_hide: 'Ver menos',
+    org_manage: 'Ver detalles',
+    org_members: 'Miembros',
+    org_membEmail: 'Correo de miembro o ID de organización',
+    org_selRole: 'Selecciona un rol',
+    org_add: 'Agregar',
   },
 }
 
