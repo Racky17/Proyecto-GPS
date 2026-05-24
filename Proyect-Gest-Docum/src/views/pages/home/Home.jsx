@@ -60,6 +60,12 @@ const Home = () => {
   const [selectedUploadFile, setSelectedUploadFile] = useState(null)
   const fileInputRef = useRef(null)
 
+  // Search state and dropdown
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false)
+  const searchRef = useRef(null)
+
   const authToken = localStorage.getItem('authToken')
   const authUser = JSON.parse(localStorage.getItem('authUser') || 'null')
   const userIdFromStorage = authUser
@@ -406,6 +412,67 @@ const Home = () => {
     }
   }, [openTagPopoverDocId])
 
+  // Search filtering scoped to current location and its subdivisions
+  useEffect(() => {
+    const q = (searchQuery || '').trim().toLowerCase()
+    if (!q) {
+      setSearchResults([])
+      return
+    }
+
+    const results = []
+
+    const pushSet = (setItem) => {
+      results.push({ type: 'set', item: setItem, path: '' })
+    }
+
+    const pushFolder = (folder) => {
+      const setItem = sets.find((s) => String(s._id) === String(folder.setId))
+      const path = setItem ? String(setItem.title) : ''
+      results.push({ type: 'folder', item: folder, path })
+    }
+
+    const pushDocument = (doc) => {
+      const folder = folders.find((f) => String(f._id) === String(doc.folderId))
+      const setItem = sets.find((s) => String(s._id) === String(doc.setId)) || (folder ? sets.find((s) => String(s._id) === String(folder.setId)) : null)
+      const path = setItem ? (setItem.title + (folder ? ' / ' + folder.title : '')) : (folder ? folder.title : '')
+      results.push({ type: 'document', item: doc, path })
+    }
+
+    if (currentLocation.type === 'root') {
+      sets.forEach((s) => { if ((s.title || '').toLowerCase().includes(q)) pushSet(s) })
+      folders.forEach((f) => { if ((f.title || '').toLowerCase().includes(q)) pushFolder(f) })
+      documents.forEach((d) => { if ((d.title || '').toLowerCase().includes(q)) pushDocument(d) })
+    } else if (currentLocation.type === 'set') {
+      const setId = currentLocation.id
+      folders.filter((f) => String(f.setId) === String(setId)).forEach((f) => { if ((f.title || '').toLowerCase().includes(q)) pushFolder(f) })
+      documents.filter((d) => String(d.setId) === String(setId)).forEach((d) => { if ((d.title || '').toLowerCase().includes(q)) pushDocument(d) })
+      // also match the set itself
+      const setMatch = sets.find((s) => String(s._id) === String(setId))
+      if (setMatch && (setMatch.title || '').toLowerCase().includes(q)) pushSet(setMatch)
+    } else if (currentLocation.type === 'folder') {
+      const folderId = currentLocation.id
+      documents.filter((d) => String(d.folderId) === String(folderId)).forEach((d) => { if ((d.title || '').toLowerCase().includes(q)) pushDocument(d) })
+      const folderMatch = folders.find((f) => String(f._id) === String(folderId))
+      if (folderMatch && (folderMatch.title || '').toLowerCase().includes(q)) pushFolder(folderMatch)
+    }
+
+    setSearchResults(results.slice(0, 50))
+    setShowSearchDropdown(results.length > 0)
+  }, [searchQuery, currentLocation, sets, folders, documents])
+
+  // Close search dropdown when clicking outside
+  useEffect(() => {
+    if (!showSearchDropdown) return undefined
+    const handleClickOutside = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setShowSearchDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showSearchDropdown])
+
   const navigateTo = (type, item) => {
     setCurrentLocation({ type, id: item._id })
     setSelected({ type, id: item._id })
@@ -704,6 +771,46 @@ const Home = () => {
     setMessage('')
   }
 
+  const handleSearchSelect = (result) => {
+    const { type, item } = result
+    if (type === 'set') {
+      navigateToLocation('set', item._id)
+    } else if (type === 'folder') {
+      navigateToLocation('folder', item._id)
+    } else if (type === 'document') {
+      if (item.folderId) {
+        navigateToLocation('folder', item.folderId)
+        setTimeout(() => setSelected({ type: 'document', id: item._id }), 50)
+      } else if (item.setId) {
+        navigateToLocation('set', item.setId)
+        setTimeout(() => setSelected({ type: 'document', id: item._id }), 50)
+      }
+    }
+    setSearchQuery('')
+    setShowSearchDropdown(false)
+  }
+
+  // Helpers to highlight matched query text in results
+  const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  const getHighlightedText = (text) => {
+    const q = (searchQuery || '').trim()
+    if (!q) return text
+    try {
+      const parts = String(text).split(new RegExp(`(${escapeRegExp(q)})`, 'ig'))
+      const qLower = q.toLowerCase()
+      return parts.map((part, i) =>
+        part.toLowerCase() === qLower ? (
+          <mark key={i} className="bg-warning text-dark px-0">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )
+    } catch (e) {
+      return text
+    }
+  }
+
   const handleGoBack = () => {
     if (currentLocation.type === 'folder' && currentFolder) {
       navigateToLocation('set', currentFolder.setId)
@@ -767,13 +874,37 @@ const Home = () => {
           </div>
         )}
 
-        {/* TODO: Adaptar busqueda a un componente o vista aparte */}
-        <CInputGroup className="mb-4 rounded-pill overflow-hidden border border-1 border-body-secondary">
-          <CInputGroupText className="bg-body-secondary border-0 text-body-secondary">
-            <CIcon icon={cilSearch} />
-          </CInputGroupText>
-          <CFormInput placeholder="Search Document" className="border-0" disabled />
-        </CInputGroup>
+        {/* Search (scoped to current location and subdivisions) */}
+        <div className="position-relative mb-4" ref={searchRef}>
+          <CInputGroup className="rounded-pill overflow-hidden border border-1 border-body-secondary">
+            <CInputGroupText className="bg-body-secondary border-0 text-body-secondary">
+              <CIcon icon={cilSearch} />
+            </CInputGroupText>
+            <CFormInput
+              placeholder={t('home_searchPlaceholder') || 'Search...'}
+              className="border-0"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setShowSearchDropdown(searchResults.length > 0)}
+            />
+          </CInputGroup>
+
+          {showSearchDropdown && searchResults.length > 0 && (
+            <div className="position-absolute w-100 bg-body rounded-3 border border-body-secondary mt-1" style={{ zIndex: 2000 }}>
+              {searchResults.map((res, idx) => (
+                <div
+                  key={`${res.type}-${String(res.item._id)}-${idx}`}
+                  className="d-flex justify-content-between align-items-center px-3 py-2 search-result-item"
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => { e.stopPropagation(); handleSearchSelect(res) }}
+                >
+                  <div className="fw-semibold">{getHighlightedText(res.item.title || '')}</div>
+                  <div className="text-body-secondary small">{res.path}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <CModal visible={showDocumentUploadModal} size="lg" onClose={handleCloseDocumentUploadModal} backdrop="static">
           <CModalHeader>

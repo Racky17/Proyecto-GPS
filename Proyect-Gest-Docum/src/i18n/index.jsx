@@ -63,6 +63,7 @@ const translations = {
     home_emptySet: 'No projects yet. Create your first project to start organizing folders and documents.',
     home_emptyFold: 'No folders or documents available in this project.',
     home_emptyFold2: 'No documents available in this folder.',
+    home_searchPlaceholder: 'Search documents by name...',
 
     shar_title: 'Shared with me',
     shar_goBack: 'My Files',
@@ -146,6 +147,7 @@ const translations = {
     home_emptySet: 'Aún no hay proyectos. Crea tu primer proyecto para organizar carpetas y archivos.',
     home_emptyFold: 'Sin carpetas o archivos en este proyecto.',
     home_emptyFold2: 'Sin archivos en esta carpeta.',
+    home_searchPlaceholder: 'Busca documentos con nombre...',
 
     shar_title: 'Compartidos conmigo',
     shar_goBack: 'Mis Archivos',
