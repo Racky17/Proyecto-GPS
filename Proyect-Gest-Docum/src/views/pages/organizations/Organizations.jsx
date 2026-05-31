@@ -22,6 +22,7 @@ const Organizations = () => {
   const [orgMembers, setOrgMembers] = useState({})
   const [memberForms, setMemberForms] = useState({})
   const [addingMember, setAddingMember] = useState(false)
+  const [removingMember, setRemovingMember] = useState({})
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
@@ -35,6 +36,18 @@ const Organizations = () => {
       return null
     }
   }, [])
+
+  const currentUserId = currentUser
+    ? String(currentUser.id ?? currentUser._id ?? currentUser.userId ?? currentUser.uid ?? '')
+    : ''
+
+  const canManageOrg = (org) => {
+    if (!org || !currentUserId) return false
+    if (String(org.ownerId) === currentUserId) return true
+    return Array.isArray(org.members) && org.members.some(
+      (member) => member.type === 'user' && String(member.id) === currentUserId && member.role === 'administrator',
+    )
+  }
 
   const authToken = localStorage.getItem('authToken')
   const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
@@ -182,6 +195,32 @@ const Organizations = () => {
     }
   }
 
+  const handleRemoveMember = async (orgId, memberId) => {
+    setError('')
+    setMessage('')
+    setRemovingMember((prev) => ({ ...prev, [memberId]: true }))
+    try {
+      const response = await fetch(`${apiBase}/api/organizations/${orgId}/members/${memberId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        setError(result.message || 'Unable to remove member.')
+        return
+      }
+      setMessage('Member removed.')
+      await toggleExpand(orgId)
+      await toggleExpand(orgId) // re-open to refresh
+    } catch (err) {
+      setError('Unable to remove member.')
+    } finally {
+      setRemovingMember((prev) => ({ ...prev, [memberId]: false }))
+    }
+  }
+
   return (
     <CContainer>
     <CRow className="justify-content-center">
@@ -248,7 +287,19 @@ const Organizations = () => {
                                     </>
                                     )}
                                 </div>
-                                <div className="text-muted small mt-2 mt-sm-0">{m.role}</div>
+                                <div className="d-flex align-items-center gap-2 mt-2 mt-sm-0">
+                                  <div className="text-muted small">{m.role}</div>
+                                  {m.type === 'user' && canManageOrg(org) && String(m.user?._id || m.user?.id || '') !== String(org.ownerId) && (
+                                    <CButton
+                                      size="sm"
+                                      color="danger"
+                                      disabled={Boolean(removingMember[m.user?._id || m.user?.id])}
+                                      onClick={() => handleRemoveMember(org._id, m.user?._id || m.user?.id)}
+                                    >
+                                      {removingMember[m.user?._id || m.user?.id] ? 'Removing...' : 'Remove'}
+                                    </CButton>
+                                  )}
+                                </div>
                                 </li>
                             ))}
                             </ul>

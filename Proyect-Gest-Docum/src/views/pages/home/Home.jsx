@@ -1,22 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import PropTypes from 'prop-types'
 import { useDispatch } from 'react-redux'
 import { useLocation } from 'react-router-dom'
 import {
   CButton,
   CCard,
   CCardBody,
+  CLink,
   CCol,
   CFormInput,
+  CFormSelect,
   CInputGroup,
   CInputGroupText,
-  CLink,
   CModal,
   CModalBody,
   CModalFooter,
   CModalHeader,
   CModalTitle,
-  CPopover,
   CRow,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
@@ -30,6 +29,13 @@ import {
   cilPlus,
 } from '@coreui/icons'
 import { useLanguage } from '../../../i18n'
+
+import ItemActions from './components/ItemActions'
+import DocumentTagPopover from './components/DocumentTagPopover'
+import DocumentActionPopover from './components/DocumentActionPopover'
+import RevisionHistoryModal from './components/RevisionHistoryModal'
+import UploadDocumentModal from './components/UploadDocumentModal'
+import ShareModal from './components/ShareModal'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 
@@ -56,6 +62,35 @@ const Home = () => {
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [showDocumentUploadModal, setShowDocumentUploadModal] = useState(false)
+  const [openMoreActionsDocId, setOpenMoreActionsDocId] = useState(null)
+  const [showDocumentUpdateModal, setShowDocumentUpdateModal] = useState(false)
+  const [documentToUpdate, setDocumentToUpdate] = useState(null)
+  const [selectedUpdateFile, setSelectedUpdateFile] = useState(null)
+  const [updateDragActive, setUpdateDragActive] = useState(false)
+  const updateFileInputRef = useRef(null)
+  const [showRevisionHistoryModal, setShowRevisionHistoryModal] = useState(false)
+  const [revisionHistoryLoading, setRevisionHistoryLoading] = useState(false)
+  const [revisionHistoryError, setRevisionHistoryError] = useState('')
+  const [revisionHistoryData, setRevisionHistoryData] = useState({
+    versions: [],
+    revisionHistory: [],
+  })
+  const [showCreateShareModal, setShowCreateShareModal] = useState(false)
+  const [createItemType, setCreateItemType] = useState(null)
+  const [createItemTitle, setCreateItemTitle] = useState('')
+  const [createShareTargetEmail, setCreateShareTargetEmail] = useState('')
+  const [createShareOrgId, setCreateShareOrgId] = useState('')
+  const [createShareRole, setCreateShareRole] = useState('read-only')
+  const [organizations, setOrganizations] = useState([])
+  const [loadingOrgs, setLoadingOrgs] = useState(false)
+  const [createModalError, setCreateModalError] = useState('')
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [shareModalType, setShareModalType] = useState(null)
+  const [shareModalItem, setShareModalItem] = useState(null)
+  const [shareModalEmail, setShareModalEmail] = useState('')
+  const [shareModalOrgId, setShareModalOrgId] = useState('')
+  const [shareModalRole, setShareModalRole] = useState('read-only')
+  const [shareModalError, setShareModalError] = useState('')
   const [dragActive, setDragActive] = useState(false)
   const [selectedUploadFile, setSelectedUploadFile] = useState(null)
   const fileInputRef = useRef(null)
@@ -88,7 +123,9 @@ const Home = () => {
       return sets.find((setItem) => String(setItem._id) === String(currentLocation.id))
     }
     if (currentLocation.type === 'folder') {
-      const folder = folders.find((folderItem) => String(folderItem._id) === String(currentLocation.id))
+      const folder = folders.find(
+        (folderItem) => String(folderItem._id) === String(currentLocation.id),
+      )
       return folder ? sets.find((setItem) => String(setItem._id) === String(folder.setId)) : null
     }
     return null
@@ -193,7 +230,9 @@ const Home = () => {
 
   const handleToggleDocumentTag = async (doc, tagId) => {
     if (!authToken) return
-    const currentTags = Array.isArray(documentUserTags[doc._id]) ? documentUserTags[doc._id].map(String) : []
+    const currentTags = Array.isArray(documentUserTags[doc._id])
+      ? documentUserTags[doc._id].map(String)
+      : []
     const normalizedTagId = String(tagId)
     const updatedTags = currentTags.includes(normalizedTagId)
       ? currentTags.filter((id) => id !== normalizedTagId)
@@ -223,88 +262,14 @@ const Home = () => {
     }
   }
 
-  const renderTagPopover = (doc) => {
-    const activeTagIds = Array.isArray(documentUserTags[doc._id]) ? documentUserTags[doc._id].map(String) : []
-    const isVisible = openTagPopoverDocId === String(doc._id)
-    return (
-      <CPopover
-        trigger="click"
-        placement="bottom"
-        visible={isVisible}
-        onHide={() => setOpenTagPopoverDocId(null)}
-        content={
-          <div className="document-tag-popover bg-body rounded-3 border-body-secondary" style={{ minWidth: '240px' }}>
-            <div className="mb-3">
-              <CLink href="/#/options" className="text-decoration-none">
-                + Manage tags
-              </CLink>
-            </div>
-            {loadingTags ? (
-              <div className="text-body-secondary">Loading tags...</div>
-            ) : tags.length === 0 ? (
-              <div className="text-muted">No tags yet. Add one in Options.</div>
-            ) : (
-              <div className="d-flex flex-column gap-2">
-                {tags.map((tag) => {
-                  const checked = activeTagIds.includes(String(tag._id))
-                  return (
-                    <label
-                      htmlFor={`tag-toggle-${doc._id}-${tag._id}`}
-                      key={String(tag._id)}
-                      className="d-flex align-items-center justify-content-between rounded-3 p-2 bg-body border border-body-secondary"
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <span className="d-flex align-items-center gap-2">
-                        <span
-                          style={{
-                            width: '10px',
-                            height: '10px',
-                            borderRadius: '50%',
-                            backgroundColor: tag.color || '#0d6efd',
-                            display: 'inline-block',
-                          }}
-                        />
-                        <span>{tag.name}</span>
-                      </span>
-                      <input
-                        id={`tag-toggle-${doc._id}-${tag._id}`}
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) => {
-                          event.stopPropagation()
-                          handleToggleDocumentTag(doc, tag._id)
-                        }}
-                      />
-                    </label>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        }
-      >
-        <CButton
-          size="sm"
-          color="secondary"
-          className="rounded-pill px-3 document-tag-trigger"
-          onClick={(event) => {
-            event.stopPropagation()
-            setOpenTagPopoverDocId((current) =>
-              current === String(doc._id) ? null : String(doc._id),
-            )
-          }}
-        >
-          {t('home_tagButton')}
-        </CButton>
-      </CPopover>
-    )
-  }
-
   const renderTagMarkers = (item) => {
     // For documents, use user-specific tags; for folders/sets, use document tags
-    const itemTagIds = item._id && documentUserTags[item._id] 
-      ? documentUserTags[item._id].map(String) 
-      : (Array.isArray(item.tags) ? item.tags.map(String) : [])
+    const itemTagIds =
+      item._id && documentUserTags[item._id]
+        ? documentUserTags[item._id].map(String)
+        : Array.isArray(item.tags)
+          ? item.tags.map(String)
+          : []
     if (itemTagIds.length === 0 || tags.length === 0) {
       return null
     }
@@ -335,34 +300,6 @@ const Home = () => {
       </div>
     )
   }
-
-  const renderItemActions = (type, item) => (
-    <div className="d-flex flex-wrap gap-2 mt-3">
-      <CButton
-        size="sm"
-        color="secondary"
-        className="rounded-pill px-3"
-        onClick={(event) => {
-          event.stopPropagation()
-          shareItem(type, item)
-        }}
-      >
-        {t('home_shareButton')}
-      </CButton>
-      {type === 'document' ? renderTagPopover(item) : null}
-      <CButton
-        size="sm"
-        color="secondary"
-        className="rounded-pill px-3"
-        onClick={(event) => {
-          event.stopPropagation()
-          moreActions(type, item)
-        }}
-      >
-        ⋯
-      </CButton>
-    </div>
-  )
 
   useEffect(() => {
     fetchData()
@@ -434,27 +371,52 @@ const Home = () => {
 
     const pushDocument = (doc) => {
       const folder = folders.find((f) => String(f._id) === String(doc.folderId))
-      const setItem = sets.find((s) => String(s._id) === String(doc.setId)) || (folder ? sets.find((s) => String(s._id) === String(folder.setId)) : null)
-      const path = setItem ? (setItem.title + (folder ? ' / ' + folder.title : '')) : (folder ? folder.title : '')
+      const setItem =
+        sets.find((s) => String(s._id) === String(doc.setId)) ||
+        (folder ? sets.find((s) => String(s._id) === String(folder.setId)) : null)
+      const path = setItem
+        ? setItem.title + (folder ? ' / ' + folder.title : '')
+        : folder
+          ? folder.title
+          : ''
       results.push({ type: 'document', item: doc, path })
     }
 
     if (currentLocation.type === 'root') {
-      sets.forEach((s) => { if ((s.title || '').toLowerCase().includes(q)) pushSet(s) })
-      folders.forEach((f) => { if ((f.title || '').toLowerCase().includes(q)) pushFolder(f) })
-      documents.forEach((d) => { if ((d.title || '').toLowerCase().includes(q)) pushDocument(d) })
+      sets.forEach((s) => {
+        if ((s.title || '').toLowerCase().includes(q)) pushSet(s)
+      })
+      folders.forEach((f) => {
+        if ((f.title || '').toLowerCase().includes(q)) pushFolder(f)
+      })
+      documents.forEach((d) => {
+        if ((d.title || '').toLowerCase().includes(q)) pushDocument(d)
+      })
     } else if (currentLocation.type === 'set') {
       const setId = currentLocation.id
-      folders.filter((f) => String(f.setId) === String(setId)).forEach((f) => { if ((f.title || '').toLowerCase().includes(q)) pushFolder(f) })
-      documents.filter((d) => String(d.setId) === String(setId)).forEach((d) => { if ((d.title || '').toLowerCase().includes(q)) pushDocument(d) })
+      folders
+        .filter((f) => String(f.setId) === String(setId))
+        .forEach((f) => {
+          if ((f.title || '').toLowerCase().includes(q)) pushFolder(f)
+        })
+      documents
+        .filter((d) => String(d.setId) === String(setId))
+        .forEach((d) => {
+          if ((d.title || '').toLowerCase().includes(q)) pushDocument(d)
+        })
       // also match the set itself
       const setMatch = sets.find((s) => String(s._id) === String(setId))
       if (setMatch && (setMatch.title || '').toLowerCase().includes(q)) pushSet(setMatch)
     } else if (currentLocation.type === 'folder') {
       const folderId = currentLocation.id
-      documents.filter((d) => String(d.folderId) === String(folderId)).forEach((d) => { if ((d.title || '').toLowerCase().includes(q)) pushDocument(d) })
+      documents
+        .filter((d) => String(d.folderId) === String(folderId))
+        .forEach((d) => {
+          if ((d.title || '').toLowerCase().includes(q)) pushDocument(d)
+        })
       const folderMatch = folders.find((f) => String(f._id) === String(folderId))
-      if (folderMatch && (folderMatch.title || '').toLowerCase().includes(q)) pushFolder(folderMatch)
+      if (folderMatch && (folderMatch.title || '').toLowerCase().includes(q))
+        pushFolder(folderMatch)
     }
 
     setSearchResults(results.slice(0, 50))
@@ -517,26 +479,330 @@ const Home = () => {
     setMessage('')
   }
 
-  const shareItem = async (type, item) => {
-    if (!authToken) {
-      setMessage('You must be logged in to share items.')
+  const getOwnerLabel = (item) => {
+    const ownerId = item?.ownerId || item?.userId || item?.createdBy || null
+    const currentUserId = authUser
+      ? String(authUser.id || authUser._id || authUser.userId || authUser.uid || '')
+      : ''
+    if (!ownerId) return 'Unknown owner'
+    if (String(ownerId) === currentUserId) return 'You'
+    return String(ownerId)
+  }
+
+  const openShareModal = (type, item) => {
+    setShareModalType(type)
+    setShareModalItem(item)
+    setShareModalEmail('')
+    setShareModalOrgId('')
+    setShareModalRole('read-only')
+    setShareModalError('')
+    setMessage('')
+    setShowShareModal(true)
+    fetchOrganizations()
+  }
+
+  const closeShareModal = () => {
+    setShowShareModal(false)
+    setShareModalType(null)
+    setShareModalItem(null)
+    setShareModalError('')
+  }
+
+  const getShareEndpoint = (type, itemId) => {
+    if (type === 'set') return `/api/user/sets/${itemId}/share`
+    if (type === 'folder') return `/api/user/folders/${itemId}/share`
+    if (type === 'document') return `/api/user/documents/${itemId}/share`
+    return null
+  }
+
+  const normalizeSharedWithEntries = (sharedWith) => {
+    if (!Array.isArray(sharedWith)) return []
+    return sharedWith
+      .map((entry) => {
+        if (!entry) return null
+        if (typeof entry === 'string' || typeof entry === 'number') {
+          return { type: 'user', userId: String(entry) }
+        }
+        if (entry.userId) {
+          return {
+            type: 'user',
+            userId: String(entry.userId),
+            role: entry.role,
+            email: entry.email || null,
+            name: entry.name || null,
+          }
+        }
+        if (entry.orgId) {
+          return {
+            type: 'org',
+            orgId: String(entry.orgId),
+            role: entry.role,
+            name: entry.name || null,
+          }
+        }
+        return null
+      })
+      .filter(Boolean)
+  }
+
+  const getShareEntries = (item) => {
+    if (!item) return []
+    const currentUserId = userIdFromStorage
+    return normalizeSharedWithEntries(item.sharedWith).map((entry) => {
+      if (entry.type === 'user') {
+        const userId = String(entry.userId || '')
+        const ownerLabel = userId === currentUserId ? 'You' : entry.name || entry.email || userId
+        const details = entry.role ? `${ownerLabel} (${entry.role})` : ownerLabel
+        return { ...entry, id: userId, label: details }
+      }
+
+      if (entry.type === 'org') {
+        const orgId = String(entry.orgId || '')
+        const org = organizations.find((orgItem) => String(orgItem._id) === orgId)
+        const orgLabel = entry.name || org?.name || org?.title || orgId
+        const details = entry.role ? `${orgLabel} (${entry.role})` : orgLabel
+        return { ...entry, id: orgId, label: details }
+      }
+
+      return {
+        type: 'unknown',
+        id: String(entry?.userId || entry?.orgId || ''),
+        label: String(entry?.name || entry?.email || entry?.id || 'Unknown'),
+      }
+    })
+  }
+
+  const canManageShareEntries = (item) => {
+    if (!item || !userIdFromStorage) return false
+    const ownerId = String(item.ownerId || item.userId || '')
+    return ownerId === userIdFromStorage
+  }
+
+  const handleRemoveShare = async (entry) => {
+    if (!authToken || !shareModalItem || !entry) {
+      setShareModalError('Unable to remove share entry.')
       return
     }
 
-    const targetEmail = window.prompt(`Share this ${type} with (user email):`)
-    if (!targetEmail || !targetEmail.trim()) {
-      return
-    }
-
-    const endpointMap = {
-      set: `/api/user/sets/${item._id}/share`,
-      folder: `/api/user/folders/${item._id}/share`,
-      document: `/api/user/documents/${item._id}/share`,
-    }
-    const endpoint = endpointMap[type]
+    const endpoint = getShareEndpoint(shareModalType, shareModalItem._id)
     if (!endpoint) {
-      setMessage(`Unable to share ${type}.`)
+      setShareModalError('Unable to remove share entry.')
       return
+    }
+
+    const body =
+      entry.type === 'user'
+        ? { targetUserId: String(entry.userId) }
+        : { targetOrgId: String(entry.orgId) }
+
+    try {
+      const response = await fetch(`${apiBase}${endpoint}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(body),
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.message || 'Unable to remove share entry.')
+      }
+
+      setShareModalItem((prevItem) => {
+        if (!prevItem) return prevItem
+        const updatedSharedWith = normalizeSharedWithEntries(prevItem.sharedWith).filter(
+          (existing) => {
+            if (entry.type === 'user') {
+              return String(existing.userId) !== String(entry.userId)
+            }
+            if (entry.type === 'org') {
+              return String(existing.orgId) !== String(entry.orgId)
+            }
+            return true
+          },
+        )
+        return {
+          ...prevItem,
+          sharedWith: updatedSharedWith,
+        }
+      })
+      await fetchData()
+      setMessage('Share access removed successfully.')
+    } catch (error) {
+      setShareModalError(error.message || 'Unable to remove share entry.')
+    }
+  }
+
+  const shareItemByEmail = async (itemId, type, email, roleParam) => {
+    const endpoint = getShareEndpoint(type, itemId)
+    if (!endpoint) {
+      throw new Error(`Unable to share ${type}.`)
+    }
+    const response = await fetch(`${apiBase}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ targetEmail: email.trim(), role: roleParam || shareModalRole }),
+    })
+    const result = await response.json()
+    if (!response.ok) {
+      throw new Error(result.message || `Unable to share ${type} with ${email}.`)
+    }
+    return email.trim()
+  }
+
+  const handleShareSubmit = async () => {
+    setShareModalError('')
+    setMessage('')
+    if (!authToken) {
+      setShareModalError('You must be logged in to share items.')
+      return
+    }
+    if (!shareModalItem) {
+      setShareModalError('No item selected.')
+      return
+    }
+    if (!shareModalEmail.trim() && !shareModalOrgId) {
+      setShareModalError('Enter an email or choose an organization to share with.')
+      return
+    }
+
+    try {
+      const sharedParts = []
+      if (shareModalEmail.trim()) {
+        await shareItemByEmail(
+          shareModalItem._id,
+          shareModalType,
+          shareModalEmail.trim(),
+          shareModalRole,
+        )
+        sharedParts.push(`user ${shareModalEmail.trim()}`)
+      }
+      if (shareModalOrgId) {
+        const endpoint = getShareEndpoint(shareModalType, shareModalItem._id)
+        const resp = await fetch(`${apiBase}${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ targetOrgId: shareModalOrgId, role: shareModalRole }),
+        })
+        const r = await resp.json()
+        if (!resp.ok) throw new Error(r.message || 'Unable to share organization')
+        sharedParts.push(`organization ${shareModalOrgId}`)
+      }
+      await fetchData()
+      setMessage(
+        `${shareModalType.charAt(0).toUpperCase() + shareModalType.slice(1)} shared successfully.` +
+          (sharedParts.length > 0 ? ` Shared with ${sharedParts.join(' and ')}.` : ''),
+      )
+      closeShareModal()
+    } catch (error) {
+      setShareModalError(error.message || 'Unable to share item.')
+    }
+  }
+
+  const fetchOrganizations = async () => {
+    if (!authToken) {
+      setOrganizations([])
+      return
+    }
+    setLoadingOrgs(true)
+    try {
+      const response = await fetch(`${apiBase}/api/organizations`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        setOrganizations([])
+        return
+      }
+      setOrganizations(Array.isArray(result.data) ? result.data : [])
+    } catch (error) {
+      setOrganizations([])
+    } finally {
+      setLoadingOrgs(false)
+    }
+  }
+
+  const openCreateShareModal = async (type) => {
+    if (type === 'folder' && (!currentLocationInfo || !currentLocationInfo.setId)) {
+      setMessage('Select a set or a folder inside a set before adding a new folder.')
+      return
+    }
+    setCreateItemType(type)
+    setCreateItemTitle('')
+    setCreateShareTargetEmail('')
+    setCreateShareOrgId('')
+    setCreateShareRole('read-only')
+    setCreateModalError('')
+    setMessage('')
+    setShowCreateShareModal(true)
+    await fetchOrganizations()
+  }
+
+  const closeCreateShareModal = () => {
+    setShowCreateShareModal(false)
+    setCreateItemType(null)
+    setCreateModalError('')
+  }
+
+  const addPopoverCloseHandler = () => {
+    if (!openMoreActionsDocId && !openTagPopoverDocId) {
+      return
+    }
+
+    const handleDocumentClick = (event) => {
+      if (
+        event.target.closest('.document-action-popover') ||
+        event.target.closest('.document-action-trigger') ||
+        event.target.closest('.document-tag-popover') ||
+        event.target.closest('.document-tag-trigger')
+      ) {
+        return
+      }
+      setOpenMoreActionsDocId(null)
+      setOpenTagPopoverDocId(null)
+    }
+
+    document.addEventListener('mousedown', handleDocumentClick)
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick)
+    }
+  }
+
+  useEffect(addPopoverCloseHandler, [openMoreActionsDocId, openTagPopoverDocId])
+
+  const handleCreateShareSubmit = async () => {
+    setCreateModalError('')
+    setMessage('')
+
+    if (!authToken) {
+      setCreateModalError('You must be logged in to create items.')
+      return
+    }
+    if (!createItemTitle.trim()) {
+      setCreateModalError('Name is required.')
+      return
+    }
+    if (createItemType === 'folder' && (!currentLocationInfo || !currentLocationInfo.setId)) {
+      setCreateModalError('Select a set or folder before creating a new folder.')
+      return
+    }
+
+    let endpoint = ''
+    const body = { title: createItemTitle.trim() }
+    if (createItemType === 'set') {
+      endpoint = '/api/user/sets'
+    } else if (createItemType === 'folder') {
+      endpoint = '/api/user/folders'
+      body.setId = currentLocationInfo?.setId
     }
 
     try {
@@ -546,21 +812,228 @@ const Home = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
         },
-        body: JSON.stringify({ targetEmail: targetEmail.trim() }),
+        body: JSON.stringify(body),
       })
       const result = await response.json()
       if (!response.ok) {
-        setMessage(result.message || `Unable to share ${type}.`)
+        setCreateModalError(result.message || `Unable to create ${createItemType}.`)
         return
       }
-      setMessage(`${type.charAt(0).toUpperCase() + type.slice(1)} shared with ${targetEmail.trim()}.`)
+
+      const createdItem = result.data
+      let shareMessage = ''
+
+      if (createShareTargetEmail.trim()) {
+        await shareItemByEmail(
+          createdItem._id,
+          createItemType,
+          createShareTargetEmail,
+          createShareRole,
+        )
+        shareMessage = ` Shared with ${createShareTargetEmail.trim()}.`
+      }
+
+      if (createShareOrgId) {
+        const endpoint = getShareEndpoint(createItemType, createdItem._id)
+        const resp = await fetch(`${apiBase}${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ targetOrgId: createShareOrgId, role: createShareRole }),
+        })
+        const r = await resp.json()
+        if (!resp.ok) throw new Error(r.message || 'Unable to share organization')
+        shareMessage += ` Shared with organization ${createShareOrgId}.`
+      }
+
+      fetchData()
+      setMessage(
+        `${createItemType.charAt(0).toUpperCase() + createItemType.slice(1)} created successfully.${shareMessage}`,
+      )
+      closeCreateShareModal()
     } catch (error) {
-      setMessage(`Unable to share ${type}. Please try again.`)
+      setCreateModalError(error.message || `Unable to create ${createItemType}. Please try again.`)
     }
   }
 
   const moreActions = (type, item) => {
     setMessage(`More actions for ${type} '${item.title}' coming soon.`)
+  }
+
+  const handleOpenDocumentUpdateModal = (doc) => {
+    setMessage('')
+    setDocumentToUpdate(doc)
+    setSelectedUpdateFile(null)
+    setUpdateDragActive(false)
+    setOpenMoreActionsDocId(null)
+    setOpenTagPopoverDocId(null)
+    setShowDocumentUpdateModal(true)
+  }
+
+  const handleCloseDocumentUpdateModal = () => {
+    setShowDocumentUpdateModal(false)
+    setDocumentToUpdate(null)
+    setSelectedUpdateFile(null)
+    setUpdateDragActive(false)
+  }
+
+  const handleUpdateFileInputChange = (event) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      setSelectedUpdateFile(file)
+      setMessage('')
+    }
+  }
+
+  const handleDocumentUpdateDrop = (event) => {
+    event.preventDefault()
+    setUpdateDragActive(false)
+    const file = event.dataTransfer?.files?.[0]
+    if (file) {
+      setSelectedUpdateFile(file)
+      setMessage('')
+    }
+  }
+
+  const handleDocumentUpdateDragOver = (event) => {
+    event.preventDefault()
+    setUpdateDragActive(true)
+  }
+
+  const handleDocumentUpdateDragLeave = () => {
+    setUpdateDragActive(false)
+  }
+
+  const handleUpdateDocument = async () => {
+    if (!selectedUpdateFile || !documentToUpdate) {
+      setMessage('Please select a file before updating.')
+      return
+    }
+    if (!authToken) {
+      setMessage('You must be logged in to update documents.')
+      return
+    }
+
+    const formData = new FormData()
+    formData.append('file', selectedUpdateFile)
+    formData.append('title', selectedUpdateFile.name)
+
+    try {
+      const response = await fetch(
+        `${apiBase}/api/user/documents/${documentToUpdate._id}/versions`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: formData,
+        },
+      )
+      const result = await response.json()
+      if (!response.ok) {
+        setMessage(result.message || 'Unable to update document.')
+        return
+      }
+      await fetchData()
+      setMessage(`Document '${selectedUpdateFile.name}' updated successfully.`)
+      handleCloseDocumentUpdateModal()
+    } catch (error) {
+      setMessage('Unable to update document. Please try again.')
+    }
+  }
+
+  const handleOpenRevisionHistoryModal = async (doc) => {
+    setRevisionHistoryError('')
+    setRevisionHistoryLoading(true)
+    setOpenMoreActionsDocId(null)
+    setOpenTagPopoverDocId(null)
+    setDocumentToUpdate(doc)
+    setShowRevisionHistoryModal(true)
+
+    try {
+      const response = await fetch(`${apiBase}/api/user/documents/${doc._id}/revisions`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.message || 'Unable to load revision history.')
+      }
+      setRevisionHistoryData({
+        versions: Array.isArray(result.data?.versions) ? result.data.versions : [],
+        revisionHistory: Array.isArray(result.data?.revisionHistory)
+          ? result.data.revisionHistory
+          : [],
+      })
+    } catch (error) {
+      setRevisionHistoryError(error.message || 'Unable to load revision history.')
+    } finally {
+      setRevisionHistoryLoading(false)
+    }
+  }
+
+  const handleCloseRevisionHistoryModal = () => {
+    setShowRevisionHistoryModal(false)
+    setDocumentToUpdate(null)
+    setRevisionHistoryData({ versions: [], revisionHistory: [] })
+    setRevisionHistoryError('')
+    setRevisionHistoryLoading(false)
+  }
+
+  const handleDownloadRevisionVersion = async (versionId) => {
+    if (!authToken || !documentToUpdate) return
+    try {
+      const response = await fetch(
+        `${apiBase}/api/user/documents/${documentToUpdate._id}/revisions/${versionId}/download`,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        },
+      )
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.message || 'Unable to download version.')
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = documentToUpdate.title || 'document'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setMessage(error.message || 'Unable to download document version.')
+    }
+  }
+
+  const handleRevertRevisionVersion = async (versionId) => {
+    if (!authToken || !documentToUpdate) return
+    try {
+      const response = await fetch(
+        `${apiBase}/api/user/documents/${documentToUpdate._id}/revisions/${versionId}/revert`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        },
+      )
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.message || 'Unable to revert version.')
+      }
+      await fetchData()
+      setMessage('Document reverted to selected version successfully.')
+      handleCloseRevisionHistoryModal()
+    } catch (error) {
+      setMessage(error.message || 'Unable to revert document version.')
+    }
   }
 
   const createItem = async (type) => {
@@ -590,17 +1063,6 @@ const Home = () => {
       }
       endpoint = '/api/user/folders'
       body.setId = currentLocationInfo.setId
-    }
-
-    if (type === 'document') {
-      if (!currentLocationInfo) {
-        setMessage('Select a set, folder, or document before adding a new document.')
-        return
-      }
-      endpoint = '/api/user/documents'
-      body.folderId = currentLocationInfo.folderId
-      body.setId = currentLocationInfo.setId
-      body.tags = []
     }
 
     try {
@@ -801,7 +1263,9 @@ const Home = () => {
       const qLower = q.toLowerCase()
       return parts.map((part, i) =>
         part.toLowerCase() === qLower ? (
-          <mark key={i} className="bg-warning text-dark px-0">{part}</mark>
+          <mark key={i} className="bg-warning text-dark px-0">
+            {part}
+          </mark>
         ) : (
           <span key={i}>{part}</span>
         ),
@@ -841,9 +1305,7 @@ const Home = () => {
                 </span>
               ))}
             </h1>
-            <div className="text-body-secondary">
-              {t('home_topDesc')}
-            </div>
+            <div className="text-body-secondary">{t('home_topDesc')}</div>
           </div>
           <div className="d-flex flex-wrap gap-2">
             {actionButtons.map((action) => (
@@ -855,7 +1317,7 @@ const Home = () => {
                 onClick={() =>
                   action.type === 'document'
                     ? handleOpenDocumentUploadModal()
-                    : createItem(action.type)
+                    : openCreateShareModal(action.type)
                 }
               >
                 <CIcon icon={cilPlus} className="me-2" />
@@ -867,7 +1329,12 @@ const Home = () => {
 
         {currentLocation.type !== 'root' && (
           <div className="mb-4">
-            <CButton color="secondary" size="sm" className="rounded-pill px-3" onClick={handleGoBack}>
+            <CButton
+              color="secondary"
+              size="sm"
+              className="rounded-pill px-3"
+              onClick={handleGoBack}
+            >
               <CIcon icon={cilArrowLeft} className="me-2" />
               {t('home_backButton')}
             </CButton>
@@ -890,13 +1357,19 @@ const Home = () => {
           </CInputGroup>
 
           {showSearchDropdown && searchResults.length > 0 && (
-            <div className="position-absolute w-100 bg-body rounded-3 border border-body-secondary mt-1" style={{ zIndex: 2000 }}>
+            <div
+              className="position-absolute w-100 bg-body rounded-3 border border-body-secondary mt-1"
+              style={{ zIndex: 2000 }}
+            >
               {searchResults.map((res, idx) => (
                 <div
                   key={`${res.type}-${String(res.item._id)}-${idx}`}
                   className="d-flex justify-content-between align-items-center px-3 py-2 search-result-item"
                   style={{ cursor: 'pointer' }}
-                  onClick={(e) => { e.stopPropagation(); handleSearchSelect(res) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleSearchSelect(res)
+                  }}
                 >
                   <div className="fw-semibold">{getHighlightedText(res.item.title || '')}</div>
                   <div className="text-body-secondary small">{res.path}</div>
@@ -906,53 +1379,142 @@ const Home = () => {
           )}
         </div>
 
-        <CModal visible={showDocumentUploadModal} size="lg" onClose={handleCloseDocumentUploadModal} backdrop="static">
+        <UploadDocumentModal
+          visible={showDocumentUploadModal}
+          onClose={handleCloseDocumentUploadModal}
+          onUpload={handleUploadDocument}
+          dragActive={dragActive}
+          onDragOver={handleDocumentDragOver}
+          onDragLeave={handleDocumentDragLeave}
+          onDrop={handleDocumentDrop}
+          onFileChange={handleFileInputChange}
+          fileInputRef={fileInputRef}
+          selectedUploadFile={selectedUploadFile}
+          t={t}
+        />
+
+        <UploadDocumentModal
+          visible={showDocumentUpdateModal}
+          onClose={handleCloseDocumentUpdateModal}
+          onUpload={handleUpdateDocument}
+          dragActive={updateDragActive}
+          onDragOver={handleDocumentUpdateDragOver}
+          onDragLeave={handleDocumentUpdateDragLeave}
+          onDrop={handleDocumentUpdateDrop}
+          onFileChange={handleUpdateFileInputChange}
+          fileInputRef={updateFileInputRef}
+          selectedUploadFile={selectedUpdateFile}
+          header={t('home_updateHeader') || 'Update Document Version'}
+          description={
+            t('home_updateDesc') ||
+            'Upload a new version to replace the current document contents while keeping the old version safe in revision history.'
+          }
+          uploadButtonLabel={t('home_updateButton') || 'Update document'}
+          selectedFileLabel={t('home_selectedUpdateFile') || 'Selected update file:'}
+          t={t}
+        />
+
+        <RevisionHistoryModal
+          visible={showRevisionHistoryModal}
+          onClose={handleCloseRevisionHistoryModal}
+          item={documentToUpdate}
+          loading={revisionHistoryLoading}
+          error={revisionHistoryError}
+          versions={revisionHistoryData.versions}
+          revisionHistory={revisionHistoryData.revisionHistory}
+          onDownloadVersion={handleDownloadRevisionVersion}
+          onRevertVersion={handleRevertRevisionVersion}
+          t={t}
+        />
+
+        <CModal
+          visible={showCreateShareModal}
+          size="lg"
+          onClose={closeCreateShareModal}
+          backdrop="static"
+        >
           <CModalHeader>
-            <CModalTitle>{t('home_uploadHeader')}</CModalTitle>
+            <CModalTitle>
+              {createItemType === 'folder' ? 'Create and Share Folder' : 'Create and Share Set'}
+            </CModalTitle>
           </CModalHeader>
           <CModalBody>
-            <div className="mb-4 text-body-secondary">
-              {t('home_uploadDesc')}
+            <div className="mb-3 text-body-secondary">
+              {createItemType === 'folder'
+                ? 'Create a new folder and optionally share it by email or with one of your organizations.'
+                : 'Create a new set and optionally share it by email or with one of your organizations.'}
             </div>
-            <div
-              className={`rounded-4 border-2 p-4 text-center ${
-                dragActive ? 'border-primary bg-primary bg-opacity-10' : 'border-body-secondary'
-              }`}
-              style={{ minHeight: '200px', cursor: 'pointer' }}
-              onDragOver={handleDocumentDragOver}
-              onDragLeave={handleDocumentDragLeave}
-              onDrop={handleDocumentDrop}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <div className="h-100 d-flex flex-column align-items-center justify-content-center gap-3">
-                <div className="fw-semibold">{t('home_uploadDropfile')}</div>
-                <div className="text-body-secondary">{t('home_uploadOr')}</div>
-                <CButton color="secondary" size="sm" onClick={(event) => { event.stopPropagation(); fileInputRef.current?.click() }}>
-                  {t('home_uploadChoose')}
-                </CButton>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  hidden
-                  onChange={handleFileInputChange}
-                />
-                {selectedUploadFile ? (
-                  <div className="text-body-secondary small">{t('home_uploadChosen')}{selectedUploadFile.name}</div>
-                ) : (
-                  <div className="text-body-secondary small">Work in progress</div>
-                )}
-              </div>
+            {createModalError && <div className="mb-3 text-danger">{createModalError}</div>}
+            <CFormInput
+              className="mb-3"
+              placeholder={createItemType === 'folder' ? 'Folder name' : 'Set name'}
+              value={createItemTitle}
+              onChange={(e) => setCreateItemTitle(e.target.value)}
+            />
+            <CFormInput
+              className="mb-3"
+              placeholder="Share with email"
+              value={createShareTargetEmail}
+              onChange={(e) => setCreateShareTargetEmail(e.target.value)}
+            />
+            <div className="mb-3">
+              <CFormSelect
+                value={createShareRole}
+                onChange={(e) => setCreateShareRole(e.target.value)}
+              >
+                <option value="admin">Admin</option>
+                <option value="write">Write</option>
+                <option value="read-only">Read-only</option>
+              </CFormSelect>
+            </div>
+            <div className="mb-3">
+              <CFormSelect
+                value={createShareOrgId}
+                onChange={(e) => setCreateShareOrgId(e.target.value)}
+              >
+                <option value="">Share with an organization</option>
+                {organizations.map((org) => (
+                  <option key={String(org._id)} value={String(org._id)}>
+                    {org.name || org.title || `Organization ${org._id}`}
+                  </option>
+                ))}
+              </CFormSelect>
+              {loadingOrgs && (
+                <div className="text-body-secondary small mt-2">Loading organizations...</div>
+              )}
             </div>
           </CModalBody>
           <CModalFooter>
-            <CButton color="secondary" onClick={handleCloseDocumentUploadModal}>
+            <CButton color="secondary" onClick={closeCreateShareModal}>
               {t('home_cancel')}
             </CButton>
-            <CButton color="primary" onClick={handleUploadDocument}>
-              {t('home_uploadButton')}
+            <CButton color="primary" onClick={handleCreateShareSubmit}>
+              {createItemType === 'folder' ? 'Create Folder' : 'Create Set'}
             </CButton>
           </CModalFooter>
         </CModal>
+
+        <ShareModal
+          visible={showShareModal}
+          onClose={closeShareModal}
+          type={shareModalType}
+          item={shareModalItem}
+          ownerLabel={shareModalItem ? getOwnerLabel(shareModalItem) : 'Unknown owner'}
+          sharedWithEntries={shareModalItem ? getShareEntries(shareModalItem) : []}
+          organizations={organizations}
+          loadingOrgs={loadingOrgs}
+          error={shareModalError}
+          email={shareModalEmail}
+          onEmailChange={setShareModalEmail}
+          orgId={shareModalOrgId}
+          onOrgChange={setShareModalOrgId}
+          role={shareModalRole}
+          onRoleChange={setShareModalRole}
+          onSubmit={handleShareSubmit}
+          onRemoveShare={handleRemoveShare}
+          canManageShare={canManageShareEntries(shareModalItem)}
+          t={t}
+        />
 
         <CCard className="bg-body-secondary rounded-4 p-4 mb-4">
           <CCardBody>
@@ -965,12 +1527,15 @@ const Home = () => {
                 {currentLocation.type === 'root' && (
                   <CRow className="g-3">
                     {sets.map((setItem) => {
-                      const isSelected = selected.type === 'set' && String(selected.id) === String(setItem._id)
+                      const isSelected =
+                        selected.type === 'set' && String(selected.id) === String(setItem._id)
                       return (
                         <CCol xs={12} sm={6} lg={4} key={setItem._id}>
                           <div
                             className={`h-100 d-flex flex-column p-3 rounded-4 ${
-                              isSelected ? 'bg-primary text-white' : 'bg-primary text-white border border-body-secondary'
+                              isSelected
+                                ? 'bg-primary text-white'
+                                : 'bg-primary text-white border border-body-secondary'
                             }`}
                             style={{ cursor: 'pointer' }}
                             onClick={() => navigateToLocation('set', setItem._id)}
@@ -982,7 +1547,15 @@ const Home = () => {
                                 {renderTagMarkers(setItem)}
                               </div>
                             </div>
-                            <div className="mt-auto">{renderItemActions('set', setItem)}</div>
+                            <div className="mt-auto">
+                              <ItemActions
+                                type="set"
+                                item={setItem}
+                                onShare={openShareModal}
+                                onMoreActions={moreActions}
+                                shareLabel={t('home_shareButton')}
+                              />
+                            </div>
                           </div>
                         </CCol>
                       )
@@ -992,16 +1565,20 @@ const Home = () => {
 
                 {currentLocation.type === 'set' && currentSet && (
                   <>
-                    {((foldersBySet[String(currentSet._id)] || []).length > 0 ||
-                      (docsBySet[String(currentSet._id)] || []).filter((doc) => !doc.folderId).length > 0) ? (
+                    {(foldersBySet[String(currentSet._id)] || []).length > 0 ||
+                    (docsBySet[String(currentSet._id)] || []).filter((doc) => !doc.folderId)
+                      .length > 0 ? (
                       <CRow className="g-3">
                         {(foldersBySet[String(currentSet._id)] || []).map((folder) => {
-                          const isSelected = selected.type === 'folder' && String(selected.id) === String(folder._id)
+                          const isSelected =
+                            selected.type === 'folder' && String(selected.id) === String(folder._id)
                           return (
                             <CCol xs={12} sm={6} lg={4} key={folder._id}>
                               <div
                                 className={`h-100 d-flex flex-column p-3 rounded-4 ${
-                                  isSelected ? 'bg-primary text-white' : 'bg-body border border-body-secondary'
+                                  isSelected
+                                    ? 'bg-primary text-white'
+                                    : 'bg-body border border-body-secondary'
                                 }`}
                                 style={{ cursor: 'pointer' }}
                                 onClick={() => navigateToLocation('folder', folder._id)}
@@ -1013,7 +1590,15 @@ const Home = () => {
                                     {renderTagMarkers(folder)}
                                   </div>
                                 </div>
-                                <div className="mt-auto">{renderItemActions('folder', folder)}</div>
+                                <div className="mt-auto">
+                                  <ItemActions
+                                    type="folder"
+                                    item={folder}
+                                    onShare={openShareModal}
+                                    onMoreActions={moreActions}
+                                    shareLabel={t('home_shareButton')}
+                                  />
+                                </div>
                               </div>
                             </CCol>
                           )
@@ -1021,12 +1606,16 @@ const Home = () => {
                         {(docsBySet[String(currentSet._id)] || [])
                           .filter((doc) => !doc.folderId)
                           .map((doc) => {
-                            const isSelected = selected.type === 'document' && String(selected.id) === String(doc._id)
+                            const isSelected =
+                              selected.type === 'document' &&
+                              String(selected.id) === String(doc._id)
                             return (
                               <CCol xs={12} sm={6} lg={4} key={doc._id}>
                                 <div
                                   className={`h-100 d-flex flex-column p-3 rounded-4 ${
-                                    isSelected ? 'bg-primary text-white' : 'bg-body border border-body-secondary'
+                                    isSelected
+                                      ? 'bg-primary text-white'
+                                      : 'bg-body border border-body-secondary'
                                   }`}
                                   style={{ cursor: 'pointer' }}
                                   onClick={() => handleSelectDocument(doc)}
@@ -1039,7 +1628,37 @@ const Home = () => {
                                       {renderTagMarkers(doc)}
                                     </div>
                                   </div>
-                                  <div className="mt-auto">{renderItemActions('document', doc)}</div>
+                                  <div className="mt-auto">
+                                    <ItemActions
+                                      type="document"
+                                      item={doc}
+                                      onShare={openShareModal}
+                                      onMoreActions={moreActions}
+                                      shareLabel={t('home_shareButton')}
+                                      moreActionsPopover={
+                                        <DocumentActionPopover
+                                          doc={doc}
+                                          openMoreActionsDocId={openMoreActionsDocId}
+                                          setOpenMoreActionsDocId={setOpenMoreActionsDocId}
+                                          onOpenUpdateDocument={handleOpenDocumentUpdateModal}
+                                          onOpenRevisionHistory={handleOpenRevisionHistoryModal}
+                                          t={t}
+                                        />
+                                      }
+                                      tagPopover={
+                                        <DocumentTagPopover
+                                          doc={doc}
+                                          openTagPopoverDocId={openTagPopoverDocId}
+                                          setOpenTagPopoverDocId={setOpenTagPopoverDocId}
+                                          tags={tags}
+                                          loadingTags={loadingTags}
+                                          onToggleTag={handleToggleDocumentTag}
+                                          activeTagIds={documentUserTags[doc._id]}
+                                          t={t}
+                                        />
+                                      }
+                                    />
+                                  </div>
                                 </div>
                               </CCol>
                             )
@@ -1056,12 +1675,15 @@ const Home = () => {
                     {(docsByFolder[String(currentFolder._id)] || []).length > 0 ? (
                       <CRow className="g-3">
                         {(docsByFolder[String(currentFolder._id)] || []).map((doc) => {
-                          const isSelected = selected.type === 'document' && String(selected.id) === String(doc._id)
+                          const isSelected =
+                            selected.type === 'document' && String(selected.id) === String(doc._id)
                           return (
                             <CCol xs={12} sm={6} lg={4} key={doc._id}>
                               <div
                                 className={`h-100 d-flex flex-column p-3 rounded-4 ${
-                                  isSelected ? 'bg-primary text-white' : 'bg-body border border-body-secondary'
+                                  isSelected
+                                    ? 'bg-primary text-white'
+                                    : 'bg-body border border-body-secondary'
                                 }`}
                                 style={{ cursor: 'pointer' }}
                                 onClick={() => handleSelectDocument(doc)}
@@ -1074,7 +1696,37 @@ const Home = () => {
                                     {renderTagMarkers(doc)}
                                   </div>
                                 </div>
-                                <div className="mt-auto">{renderItemActions('document', doc)}</div>
+                                <div className="mt-auto">
+                                  <ItemActions
+                                    type="document"
+                                    item={doc}
+                                    onShare={openShareModal}
+                                    onMoreActions={moreActions}
+                                    shareLabel={t('home_shareButton')}
+                                    moreActionsPopover={
+                                      <DocumentActionPopover
+                                        doc={doc}
+                                        openMoreActionsDocId={openMoreActionsDocId}
+                                        setOpenMoreActionsDocId={setOpenMoreActionsDocId}
+                                        onOpenUpdateDocument={handleOpenDocumentUpdateModal}
+                                        onOpenRevisionHistory={handleOpenRevisionHistoryModal}
+                                        t={t}
+                                      />
+                                    }
+                                    tagPopover={
+                                      <DocumentTagPopover
+                                        doc={doc}
+                                        openTagPopoverDocId={openTagPopoverDocId}
+                                        setOpenTagPopoverDocId={setOpenTagPopoverDocId}
+                                        tags={tags}
+                                        loadingTags={loadingTags}
+                                        onToggleTag={handleToggleDocumentTag}
+                                        activeTagIds={documentUserTags[doc._id]}
+                                        t={t}
+                                      />
+                                    }
+                                  />
+                                </div>
                               </div>
                             </CCol>
                           )
@@ -1090,9 +1742,7 @@ const Home = () => {
           </CCardBody>
         </CCard>
 
-        {message && (
-          <div className="alert alert-info rounded-4 px-4 py-3">{message}</div>
-        )}
+        {message && <div className="alert alert-info rounded-4 px-4 py-3">{message}</div>}
       </CCol>
     </CRow>
   )

@@ -8,13 +8,15 @@ import {
   CFormInput,
   CInputGroup,
   CInputGroupText,
-  CPopover,
   CRow,
   CSpinner,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilArrowLeft, cilFile, cilSearch } from '@coreui/icons'
 import { useLanguage } from '../../../i18n'
+import ItemActions from '../home/components/ItemActions'
+import DocumentTagPopover from '../home/components/DocumentTagPopover'
+import DocumentActionPopover from '../home/components/DocumentActionPopover'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 
@@ -28,6 +30,7 @@ const Shared = () => {
   const [selected, setSelected] = useState({ type: null, id: null })
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [ownerNames, setOwnerNames] = useState({})
   const { t } = useLanguage()
 
   const authToken = localStorage.getItem('authToken')
@@ -36,15 +39,116 @@ const Shared = () => {
     ? String(authUser.id ?? authUser._id ?? authUser.userId ?? authUser.uid ?? '')
     : null
 
+  const getOwnerId = (item) => String(item.ownerId || item.userId)
+
+  const normalizeSharedWithEntries = (sharedWith) => {
+    if (!Array.isArray(sharedWith)) return []
+    return sharedWith
+      .map((entry) => {
+        if (!entry) return null
+        if (typeof entry === 'string' || typeof entry === 'number') {
+          return { type: 'user', userId: String(entry) }
+        }
+        if (entry.userId) {
+          return {
+            type: 'user',
+            userId: String(entry.userId),
+            role: entry.role,
+            email: entry.email || null,
+            name: entry.name || null,
+          }
+        }
+        if (entry.orgId) {
+          return {
+            type: 'org',
+            orgId: String(entry.orgId),
+            role: entry.role,
+            name: entry.name || null,
+          }
+        }
+        return null
+      })
+      .filter(Boolean)
+  }
+
   const sharedDocuments = useMemo(() => {
     if (!userIdFromStorage) return []
-    return documents.filter((doc) => {
-      const docSharedWith = Array.isArray(doc.sharedWith) ? doc.sharedWith.map(String) : []
-      const isSharedWithMe = docSharedWith.includes(userIdFromStorage)
-      const isNotMine = String(doc.ownerId) !== userIdFromStorage
-      return isSharedWithMe && isNotMine
-    })
+    return documents.filter((doc) => getOwnerId(doc) !== userIdFromStorage)
   }, [documents, userIdFromStorage])
+
+  useEffect(() => {
+    if (!authToken) return
+
+    const ownerIdsToFetch = Array.from(
+      new Set(sharedDocuments.map((doc) => getOwnerId(doc)).filter((id) => id && !ownerNames[id])),
+    )
+
+    if (ownerIdsToFetch.length === 0) return
+
+    let cancelled = false
+
+    const loadOwnerNames = async () => {
+      const fetchedNames = {}
+      await Promise.all(
+        ownerIdsToFetch.map(async (ownerId) => {
+          const username = await fetchOwnerName(ownerId)
+          if (!cancelled && username) {
+            fetchedNames[ownerId] = username
+          }
+        }),
+      )
+      if (!cancelled && Object.keys(fetchedNames).length > 0) {
+        setOwnerNames((prev) => ({ ...prev, ...fetchedNames }))
+      }
+    }
+
+    loadOwnerNames()
+    return () => {
+      cancelled = true
+    }
+  }, [sharedDocuments, authToken, ownerNames])
+
+  const getOwnerLabel = (item) => {
+    if (!item) return t('shar_unknown')
+
+    const ownerId = getOwnerId(item)
+    const currentUserId = userIdFromStorage || ''
+
+    if (!ownerId) {
+      const potentialOwner = normalizeSharedWithEntries(item.sharedWith).find(
+        (entry) => entry.type === 'user' && entry.name && String(entry.userId) !== currentUserId,
+      )
+      if (potentialOwner) return potentialOwner.name
+      return t('shar_unknown')
+    }
+
+    const ownerEntry = normalizeSharedWithEntries(item.sharedWith).find(
+      (entry) => entry.type === 'user' && String(entry.userId) === ownerId && entry.name,
+    )
+    if (ownerEntry) return ownerEntry.name
+
+    return ownerNames[ownerId] || ownerId
+  }
+
+  const fetchOwnerName = async (ownerId) => {
+    try {
+      const response = await fetch(`${apiBase}/api/user/account/${ownerId}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        setMessage(result.message || 'Unable to fetch usernames, showing IDs instead.')
+        return null
+      }
+      return result.username || null
+    } catch (error) {
+      setMessage('Unable to fetch usernames, showing IDs instead.')
+      return null
+    }
+  }
 
   const fetchData = async () => {
     if (!authToken) return
@@ -157,7 +261,10 @@ const Shared = () => {
         visible={isVisible}
         onHide={() => setOpenTagPopoverDocId(null)}
         content={
-          <div className="document-tag-popover bg-body rounded-3 border-body-secondary" style={{ minWidth: '240px' }}>
+          <div
+            className="document-tag-popover bg-body rounded-3 border-body-secondary"
+            style={{ minWidth: '240px' }}
+          >
             <div className="mb-3">
               <a href="/#/options" className="text-decoration-none">
                 + Manage tags
@@ -225,9 +332,12 @@ const Shared = () => {
   }
 
   const renderTagMarkers = (item) => {
-    const itemTagIds = item._id && documentUserTags[item._id]
-      ? documentUserTags[item._id].map(String)
-      : (Array.isArray(item.tags) ? item.tags.map(String) : [])
+    const itemTagIds =
+      item._id && documentUserTags[item._id]
+        ? documentUserTags[item._id].map(String)
+        : Array.isArray(item.tags)
+          ? item.tags.map(String)
+          : []
     if (itemTagIds.length === 0 || tags.length === 0) {
       return null
     }
@@ -260,31 +370,27 @@ const Shared = () => {
   }
 
   const renderItemActions = (type, item) => (
-    <div className="d-flex flex-wrap gap-2 mt-3">
-      <CButton
-        size="sm"
-        color="secondary"
-        className="rounded-pill px-3"
-        onClick={(event) => {
-          event.stopPropagation()
-          shareItem(type, item)
-        }}
-      >
-        Share
-      </CButton>
-      {type === 'document' ? renderTagPopover(item) : null}
-      <CButton
-        size="sm"
-        color="secondary"
-        className="rounded-pill px-3"
-        onClick={(event) => {
-          event.stopPropagation()
-          moreActions(type, item)
-        }}
-      >
-        ⋯
-      </CButton>
-    </div>
+    <ItemActions
+      type={type}
+      item={item}
+      onShare={shareItem}
+      onMoreActions={moreActions}
+      shareLabel={t('home_shareButton') || 'Share'}
+      tagPopover={
+        type === 'document' ? (
+          <DocumentTagPopover
+            doc={item}
+            openTagPopoverDocId={openTagPopoverDocId}
+            setOpenTagPopoverDocId={setOpenTagPopoverDocId}
+            tags={tags}
+            loadingTags={loadingTags}
+            onToggleTag={handleToggleDocumentTag}
+            activeTagIds={documentUserTags[item._id]}
+            t={t}
+          />
+        ) : null
+      }
+    />
   )
 
   useEffect(() => {
@@ -386,7 +492,9 @@ const Shared = () => {
         setMessage(result.message || `Unable to share ${type}.`)
         return
       }
-      setMessage(`${type.charAt(0).toUpperCase() + type.slice(1)} shared with ${targetEmail.trim()}.`)
+      setMessage(
+        `${type.charAt(0).toUpperCase() + type.slice(1)} shared with ${targetEmail.trim()}.`,
+      )
     } catch (error) {
       setMessage(`Unable to share ${type}. Please try again.`)
     }
@@ -433,12 +541,15 @@ const Shared = () => {
             ) : (
               <CRow className="g-3">
                 {sharedDocuments.map((doc) => {
-                  const isSelected = selected.type === 'document' && String(selected.id) === String(doc._id)
+                  const isSelected =
+                    selected.type === 'document' && String(selected.id) === String(doc._id)
                   return (
                     <CCol xs={12} sm={6} lg={4} key={doc._id}>
                       <div
                         className={`h-100 d-flex flex-column p-3 rounded-4 ${
-                          isSelected ? 'bg-primary text-white' : 'bg-body border border-body-secondary'
+                          isSelected
+                            ? 'bg-primary text-white'
+                            : 'bg-body border border-body-secondary'
                         }`}
                         style={{ cursor: 'pointer' }}
                         onClick={() => handleSelectDocument(doc)}
@@ -449,7 +560,7 @@ const Shared = () => {
                           <div>
                             <div className="fw-semibold">{doc.title}</div>
                             <div className="text-body-secondary small">
-                              {t('shar_from')} <strong>{doc.ownerName || t('shar_unknown')}</strong>
+                              {t('shar_from')} <strong>{getOwnerLabel(doc)}</strong>
                             </div>
                             {renderTagMarkers(doc)}
                           </div>
@@ -464,9 +575,7 @@ const Shared = () => {
           </CCardBody>
         </CCard>
 
-        {message && (
-          <div className="alert alert-info rounded-4 px-4 py-3">{message}</div>
-        )}
+        {message && <div className="alert alert-info rounded-4 px-4 py-3">{message}</div>}
       </CCol>
     </CRow>
   )

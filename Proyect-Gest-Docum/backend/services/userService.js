@@ -18,6 +18,15 @@ const findUserByUsernameOrEmail = async (value) => {
   return fallbackUsers.find((user) => user.username === value || user.email === value) || null
 }
 
+const findUserById = async (id) => {
+  if (isMongoConnected() && collections.users) {
+    if (!ObjectId.isValid(id)) return null
+    return collections.users.findOne({ _id: new ObjectId(id) })
+  }
+
+  return fallbackUsers.find((user) => String(user._id) === String(id)) || null
+}
+
 const findUserByIdAndUsername = async (id, username) => {
   if (isMongoConnected() && collections.users) {
     return collections.users.findOne({ _id: new ObjectId(id), username })
@@ -51,6 +60,7 @@ module.exports = {
   hashPassword,
   comparePassword,
   findUserByUsernameOrEmail,
+  findUserById,
   findUserByIdAndUsername,
   findUserByCredentials,
   insertUser,

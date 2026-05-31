@@ -1,70 +1,145 @@
 const { ObjectId, isMongoConnected, collections, fallbackDocs, fallbackFolders, fallbackSets, fallbackTags, fallbackUserDocumentTags } = require('../config/mongo')
+const { findOrganizationById, getOrganizationMembersExpanded } = require('./orgService')
 
-const getSharedWithList = (item) => {
-  if (!item) return []
-  if (Array.isArray(item.sharedWith)) {
-    return item.sharedWith.map((id) => String(id))
+const normalizeSharedWithEntries = (sharedWith) => {
+  if (!Array.isArray(sharedWith)) {
+    return []
   }
-  return []
+
+  return sharedWith
+    .map((entry) => {
+      if (!entry) return null
+      // plain string -> user id
+      if (typeof entry === 'string' || typeof entry === 'number') {
+        return { type: 'user', userId: String(entry), role: 'read-only' }
+      }
+      // explicit user entry
+      if (entry.userId || entry.user) {
+        const userId = String(entry.userId || entry.user || entry.id || '')
+        if (!userId) return null
+        return { type: 'user', userId, role: entry.role || 'read-only' }
+      }
+      // explicit org entry
+      if (entry.orgId || entry.organization || entry.org) {
+        const orgId = String(entry.orgId || (entry.organization && entry.organization._id) || entry.org || entry.id || '')
+        if (!orgId) return null
+        return { type: 'org', orgId, role: entry.role || null }
+      }
+      return null
+    })
+    .filter(Boolean)
+}
+
+const getSharedWithList = async (item) => {
+  if (!item || !Array.isArray(item.sharedWith)) return []
+  const entries = normalizeSharedWithEntries(item.sharedWith)
+  const result = new Set()
+  for (const e of entries) {
+    if (e.type === 'user') result.add(String(e.userId))
+    else if (e.type === 'org') {
+      // expand org members to user ids
+      const org = await findOrganizationById(e.orgId)
+      const members = await getOrganizationMembersExpanded(org)
+      for (const m of members) {
+        if (m.type === 'user' && m.user && (m.user._id || m.user.id)) {
+          result.add(String(m.user._id || m.user.id))
+        }
+        // nested orgs will be represented as org entries; their members expansion handled by getOrganizationMembersExpanded
+      }
+    }
+  }
+  return Array.from(result)
+}
+
+const sharedWithContainsUser = async (sharedWith, userId) => {
+  const entries = normalizeSharedWithEntries(sharedWith)
+  for (const entry of entries) {
+    if (entry.type === 'user' && String(entry.userId) === String(userId)) return true
+    if (entry.type === 'org') {
+      const org = await findOrganizationById(entry.orgId)
+      const members = await getOrganizationMembersExpanded(org)
+      if (members.some((m) => m.type === 'user' && String((m.user && (m.user._id || m.user.id)) || '') === String(userId))) return true
+    }
+  }
+  return false
 }
 
 const findAccessibleDocumentsForUser = async (userId) => {
   if (isMongoConnected() && collections.documents) {
-    return collections.documents
-      .find({
-        $or: [
-          { ownerId: new ObjectId(userId) },
-          { sharedWith: new ObjectId(userId) },
-          { userId: new ObjectId(userId) },
-        ],
-      })
-      .toArray()
+    // also include org-based shares by finding organizations where the user is a member
+    const orgIds = []
+    if (collections.organizations) {
+      const orgDocs = await collections.organizations
+        .find({ $or: [ { ownerId: new ObjectId(userId) }, { 'members.type': 'user', 'members.id': new ObjectId(userId) } ] })
+        .project({ _id: 1 })
+        .toArray()
+      orgDocs.forEach((o) => orgIds.push(o._id))
+    }
+
+    const orClauses = [
+      { ownerId: new ObjectId(userId) },
+      { userId: new ObjectId(userId) },
+      { sharedWith: new ObjectId(userId) },
+      { 'sharedWith.userId': new ObjectId(userId) },
+    ]
+    if (orgIds.length > 0) {
+      orClauses.push({ 'sharedWith.orgId': { $in: orgIds } })
+    }
+
+    return collections.documents.find({
+      $and: [
+        { deletedAt: { $exists: false } },
+        { $or: orClauses },
+      ],
+    }).toArray()
   }
 
-  return fallbackDocs.filter(
-    (doc) =>
-      String(doc.ownerId) === String(userId) ||
-      String(doc.userId) === String(userId) ||
-      (doc.sharedWith || []).includes(String(userId)),
-  )
+  // fallback: check direct or org-based membership
+  return Promise.all(fallbackDocs.map(async (doc) => ({ doc, ok: await sharedWithContainsUser(doc.sharedWith, userId) })))
+    .then((arr) => arr
+      .filter((r) => !r.doc.deletedAt && (String(r.doc.ownerId) === String(userId) || String(r.doc.userId) === String(userId) || r.ok))
+      .map((r) => r.doc),
+    )
 }
 
 const findAccessibleFoldersForUser = async (userId) => {
   if (isMongoConnected() && collections.folders) {
-    return collections.folders
-      .find({
-        $or: [
-          { ownerId: new ObjectId(userId) },
-          { sharedWith: new ObjectId(userId) },
-        ],
-      })
-      .toArray()
+    const orgIds = []
+    if (collections.organizations) {
+      const orgDocs = await collections.organizations
+        .find({ $or: [ { ownerId: new ObjectId(userId) }, { 'members.type': 'user', 'members.id': new ObjectId(userId) } ] })
+        .project({ _id: 1 })
+        .toArray()
+      orgDocs.forEach((o) => orgIds.push(o._id))
+    }
+
+    const orClauses = [ { ownerId: new ObjectId(userId) }, { sharedWith: new ObjectId(userId) }, { 'sharedWith.userId': new ObjectId(userId) } ]
+    if (orgIds.length > 0) orClauses.push({ 'sharedWith.orgId': { $in: orgIds } })
+    return collections.folders.find({ $or: orClauses }).toArray()
   }
 
-  return fallbackFolders.filter(
-    (folder) =>
-      String(folder.ownerId) === String(userId) ||
-      (folder.sharedWith || []).includes(String(userId)),
-  )
+  return Promise.all(fallbackFolders.map(async (folder) => ({ folder, ok: await sharedWithContainsUser(folder.sharedWith, userId) })))
+    .then((arr) => arr.filter((r) => String(r.folder.ownerId) === String(userId) || r.ok).map((r) => r.folder))
 }
 
 const findAccessibleSetsForUser = async (userId) => {
   if (isMongoConnected() && collections.sets) {
-    return collections.sets
-      .find({
-        $or: [
-          { ownerId: new ObjectId(userId) },
-          { sharedWith: new ObjectId(userId) },
-        ],
-      })
-      .toArray()
+    const orgIds = []
+    if (collections.organizations) {
+      const orgDocs = await collections.organizations
+        .find({ $or: [ { ownerId: new ObjectId(userId) }, { 'members.type': 'user', 'members.id': new ObjectId(userId) } ] })
+        .project({ _id: 1 })
+        .toArray()
+      orgDocs.forEach((o) => orgIds.push(o._id))
+    }
+
+    const orClauses = [ { ownerId: new ObjectId(userId) }, { sharedWith: new ObjectId(userId) }, { 'sharedWith.userId': new ObjectId(userId) } ]
+    if (orgIds.length > 0) orClauses.push({ 'sharedWith.orgId': { $in: orgIds } })
+    return collections.sets.find({ $or: orClauses }).toArray()
   }
 
-  return fallbackSets.filter(
-    (setItem) =>
-      String(setItem.ownerId) === String(userId) ||
-      (setItem.sharedWith || []).includes(String(userId)),
-  )
+  return Promise.all(fallbackSets.map(async (setItem) => ({ setItem, ok: await sharedWithContainsUser(setItem.sharedWith, userId) })))
+    .then((arr) => arr.filter((r) => String(r.setItem.ownerId) === String(userId) || r.ok).map((r) => r.setItem))
 }
 
 const findDocumentById = async (documentId) => {
@@ -79,21 +154,27 @@ const findDocumentForUser = async (documentId, userId) => {
   if (isMongoConnected() && collections.documents) {
     return collections.documents.findOne({
       _id: new ObjectId(documentId),
+      deletedAt: { $exists: false },
       $or: [
         { ownerId: new ObjectId(userId) },
-        { sharedWith: new ObjectId(userId) },
         { userId: new ObjectId(userId) },
+        { sharedWith: new ObjectId(userId) },
+        { 'sharedWith.userId': new ObjectId(userId) },
       ],
     })
   }
 
-  return fallbackDocs.find(
-    (doc) =>
-      String(doc._id) === String(documentId) &&
-      (String(doc.ownerId) === String(userId) ||
-        String(doc.userId) === String(userId) ||
-        (doc.sharedWith || []).includes(String(userId))),
+  const candidate = await Promise.all(
+    fallbackDocs.map(async (doc) => ({
+      doc,
+      ok: !doc.deletedAt && String(doc._id) === String(documentId) &&
+        (String(doc.ownerId) === String(userId) ||
+          String(doc.userId) === String(userId) ||
+          await sharedWithContainsUser(doc.sharedWith, userId)),
+    })),
   )
+  const matched = candidate.find((result) => result.ok && String(result.doc._id) === String(documentId))
+  return matched ? matched.doc : null
 }
 
 const findFolderById = async (folderId) => {
@@ -259,54 +340,227 @@ const upsertUserDocumentTags = async (userId, documentId, tags) => {
   return { value: record }
 }
 
-const shareDocumentWithUser = async (docId, userId) => {
+const getSharedRoleForUser = async (item, userId) => {
+  const entries = normalizeSharedWithEntries(item?.sharedWith)
+  // direct user entry
+  const userEntry = entries.find((entry) => entry.type === 'user' && String(entry.userId) === String(userId))
+  if (userEntry) return userEntry.role
+
+  // check organizations: if item shared with an org, use the member's role in that org
+  for (const entry of entries.filter((e) => e.type === 'org')) {
+    const org = await findOrganizationById(entry.orgId)
+    if (!org) continue
+    const members = await getOrganizationMembersExpanded(org)
+    for (const m of members) {
+      if (m.type === 'user' && m.user && (String(m.user._id) === String(userId) || String(m.user.id) === String(userId))) {
+        return m.role || entry.role || null
+      }
+      // nested orgs are handled by getOrganizationMembersExpanded
+    }
+  }
+  return null
+}
+
+const removeSharedWithEntries = (sharedWith, userId, orgId) => {
+  const normalizedUserId = userId ? String(userId) : null
+  const normalizedOrgId = orgId ? String(orgId) : null
+  return normalizeSharedWithEntries(sharedWith).filter((entry) => {
+    if (normalizedUserId && entry.type === 'user') {
+      return String(entry.userId) !== normalizedUserId
+    }
+    if (normalizedOrgId && entry.type === 'org') {
+      return String(entry.orgId) !== normalizedOrgId
+    }
+    return true
+  })
+}
+
+const shareDocumentWithOrg = async (docId, orgId, orgName = null, role = null) => {
+  const normalizedOrgId = String(orgId)
   if (isMongoConnected() && collections.documents) {
+    const existing = await collections.documents.findOne({ _id: new ObjectId(docId) })
+    if (!existing) return null
+    const sharedWith = normalizeSharedWithEntries(existing.sharedWith)
+    const newSharedWith = sharedWith.filter((entry) => !(entry.type === 'org' && String(entry.orgId) === normalizedOrgId))
+    newSharedWith.push({ orgId: new ObjectId(normalizedOrgId), role, name: orgName })
     return collections.documents.updateOne(
       { _id: new ObjectId(docId) },
-      { $addToSet: { sharedWith: new ObjectId(userId) } },
+      { $set: { sharedWith: newSharedWith } },
+    )
+  }
+  const fallbackIndex = fallbackDocs.findIndex((doc) => String(doc._id) === String(docId))
+  if (fallbackIndex >= 0) {
+    const sharedWith = normalizeSharedWithEntries(fallbackDocs[fallbackIndex].sharedWith)
+    const newSharedWith = sharedWith.filter((entry) => !(entry.type === 'org' && String(entry.orgId) === normalizedOrgId))
+    newSharedWith.push({ orgId: normalizedOrgId, role, name: orgName })
+    fallbackDocs[fallbackIndex].sharedWith = newSharedWith
+  }
+}
+
+const shareFolderWithOrg = async (folderId, orgId, orgName = null, role = null) => {
+  const normalizedOrgId = String(orgId)
+  if (isMongoConnected() && collections.folders) {
+    const existing = await collections.folders.findOne({ _id: new ObjectId(folderId) })
+    if (!existing) return null
+    const sharedWith = normalizeSharedWithEntries(existing.sharedWith)
+    const newSharedWith = sharedWith.filter((entry) => !(entry.type === 'org' && String(entry.orgId) === normalizedOrgId))
+    newSharedWith.push({ orgId: new ObjectId(normalizedOrgId), role, name: orgName })
+    return collections.folders.updateOne(
+      { _id: new ObjectId(folderId) },
+      { $set: { sharedWith: newSharedWith } },
+    )
+  }
+  const fallbackIndex = fallbackFolders.findIndex((folder) => String(folder._id) === String(folderId))
+  if (fallbackIndex >= 0) {
+    const sharedWith = normalizeSharedWithEntries(fallbackFolders[fallbackIndex].sharedWith)
+    const newSharedWith = sharedWith.filter((entry) => !(entry.type === 'org' && String(entry.orgId) === normalizedOrgId))
+    newSharedWith.push({ orgId: normalizedOrgId, role, name: orgName })
+    fallbackFolders[fallbackIndex].sharedWith = newSharedWith
+  }
+}
+
+const shareSetWithOrg = async (setId, orgId, orgName = null, role = null) => {
+  const normalizedOrgId = String(orgId)
+  if (isMongoConnected() && collections.sets) {
+    const existing = await collections.sets.findOne({ _id: new ObjectId(setId) })
+    if (!existing) return null
+    const sharedWith = normalizeSharedWithEntries(existing.sharedWith)
+    const newSharedWith = sharedWith.filter((entry) => !(entry.type === 'org' && String(entry.orgId) === normalizedOrgId))
+    newSharedWith.push({ orgId: new ObjectId(normalizedOrgId), role, name: orgName })
+    return collections.sets.updateOne(
+      { _id: new ObjectId(setId) },
+      { $set: { sharedWith: newSharedWith } },
+    )
+  }
+  const fallbackIndex = fallbackSets.findIndex((setItem) => String(setItem._id) === String(setId))
+  if (fallbackIndex >= 0) {
+    const sharedWith = normalizeSharedWithEntries(fallbackSets[fallbackIndex].sharedWith)
+    const newSharedWith = sharedWith.filter((entry) => !(entry.type === 'org' && String(entry.orgId) === normalizedOrgId))
+    newSharedWith.push({ orgId: normalizedOrgId, role, name: orgName })
+    fallbackSets[fallbackIndex].sharedWith = newSharedWith
+  }
+}
+
+const removeDocumentShare = async (docId, userId, orgId) => {
+  if (isMongoConnected() && collections.documents) {
+    const existing = await collections.documents.findOne({ _id: new ObjectId(docId) })
+    if (!existing) return null
+    const filtered = removeSharedWithEntries(existing.sharedWith, userId, orgId)
+    return collections.documents.updateOne(
+      { _id: new ObjectId(docId) },
+      { $set: { sharedWith: filtered } },
+    )
+  }
+  const fallbackIndex = fallbackDocs.findIndex((doc) => String(doc._id) === String(docId))
+  if (fallbackIndex >= 0) {
+    fallbackDocs[fallbackIndex].sharedWith = removeSharedWithEntries(fallbackDocs[fallbackIndex].sharedWith, userId, orgId)
+  }
+}
+
+const removeFolderShare = async (folderId, userId, orgId) => {
+  if (isMongoConnected() && collections.folders) {
+    const existing = await collections.folders.findOne({ _id: new ObjectId(folderId) })
+    if (!existing) return null
+    const filtered = removeSharedWithEntries(existing.sharedWith, userId, orgId)
+    return collections.folders.updateOne(
+      { _id: new ObjectId(folderId) },
+      { $set: { sharedWith: filtered } },
+    )
+  }
+  const fallbackIndex = fallbackFolders.findIndex((folder) => String(folder._id) === String(folderId))
+  if (fallbackIndex >= 0) {
+    fallbackFolders[fallbackIndex].sharedWith = removeSharedWithEntries(fallbackFolders[fallbackIndex].sharedWith, userId, orgId)
+  }
+}
+
+const removeSetShare = async (setId, userId, orgId) => {
+  if (isMongoConnected() && collections.sets) {
+    const existing = await collections.sets.findOne({ _id: new ObjectId(setId) })
+    if (!existing) return null
+    const filtered = removeSharedWithEntries(existing.sharedWith, userId, orgId)
+    return collections.sets.updateOne(
+      { _id: new ObjectId(setId) },
+      { $set: { sharedWith: filtered } },
+    )
+  }
+  const fallbackIndex = fallbackSets.findIndex((setItem) => String(setItem._id) === String(setId))
+  if (fallbackIndex >= 0) {
+    fallbackSets[fallbackIndex].sharedWith = removeSharedWithEntries(fallbackSets[fallbackIndex].sharedWith, userId, orgId)
+  }
+}
+
+const shareDocumentWithUser = async (docId, userId, role = 'read-only', email = null, name = null) => {
+  const normalizedUserId = String(userId)
+  if (isMongoConnected() && collections.documents) {
+    const existing = await collections.documents.findOne({ _id: new ObjectId(docId) })
+    if (!existing) return null
+
+    const sharedWith = normalizeSharedWithEntries(existing.sharedWith)
+    const newSharedWith = sharedWith.filter((entry) => String(entry.userId) !== normalizedUserId)
+    newSharedWith.push({ userId: new ObjectId(normalizedUserId), role, email, name })
+
+    return collections.documents.updateOne(
+      { _id: new ObjectId(docId) },
+      { $set: { sharedWith: newSharedWith } },
     )
   }
 
   const fallbackIndex = fallbackDocs.findIndex((doc) => String(doc._id) === String(docId))
   if (fallbackIndex >= 0) {
-    fallbackDocs[fallbackIndex].sharedWith = fallbackDocs[fallbackIndex].sharedWith || []
-    if (!fallbackDocs[fallbackIndex].sharedWith.includes(String(userId))) {
-      fallbackDocs[fallbackIndex].sharedWith.push(String(userId))
-    }
+    const sharedWith = normalizeSharedWithEntries(fallbackDocs[fallbackIndex].sharedWith)
+    const newSharedWith = sharedWith.filter((entry) => String(entry.userId) !== normalizedUserId)
+    newSharedWith.push({ userId: normalizedUserId, role, email, name })
+    fallbackDocs[fallbackIndex].sharedWith = newSharedWith
   }
 }
 
-const shareFolderWithUser = async (folderId, userId) => {
+const shareFolderWithUser = async (folderId, userId, role = 'read-only', email = null, name = null) => {
+  const normalizedUserId = String(userId)
   if (isMongoConnected() && collections.folders) {
+    const existing = await collections.folders.findOne({ _id: new ObjectId(folderId) })
+    if (!existing) return null
+
+    const sharedWith = normalizeSharedWithEntries(existing.sharedWith)
+    const newSharedWith = sharedWith.filter((entry) => String(entry.userId) !== normalizedUserId)
+    newSharedWith.push({ userId: new ObjectId(normalizedUserId), role, email, name })
+
     return collections.folders.updateOne(
       { _id: new ObjectId(folderId) },
-      { $addToSet: { sharedWith: new ObjectId(userId) } },
+      { $set: { sharedWith: newSharedWith } },
     )
   }
 
   const fallbackIndex = fallbackFolders.findIndex((folder) => String(folder._id) === String(folderId))
   if (fallbackIndex >= 0) {
-    fallbackFolders[fallbackIndex].sharedWith = fallbackFolders[fallbackIndex].sharedWith || []
-    if (!fallbackFolders[fallbackIndex].sharedWith.includes(String(userId))) {
-      fallbackFolders[fallbackIndex].sharedWith.push(String(userId))
-    }
+    const sharedWith = normalizeSharedWithEntries(fallbackFolders[fallbackIndex].sharedWith)
+    const newSharedWith = sharedWith.filter((entry) => String(entry.userId) !== normalizedUserId)
+    newSharedWith.push({ userId: normalizedUserId, role, email, name })
+    fallbackFolders[fallbackIndex].sharedWith = newSharedWith
   }
 }
 
-const shareSetWithUser = async (setId, userId) => {
+const shareSetWithUser = async (setId, userId, role = 'read-only', email = null, name = null) => {
+  const normalizedUserId = String(userId)
   if (isMongoConnected() && collections.sets) {
+    const existing = await collections.sets.findOne({ _id: new ObjectId(setId) })
+    if (!existing) return null
+
+    const sharedWith = normalizeSharedWithEntries(existing.sharedWith)
+    const newSharedWith = sharedWith.filter((entry) => String(entry.userId) !== normalizedUserId)
+    newSharedWith.push({ userId: new ObjectId(normalizedUserId), role, email, name })
+
     return collections.sets.updateOne(
       { _id: new ObjectId(setId) },
-      { $addToSet: { sharedWith: new ObjectId(userId) } },
+      { $set: { sharedWith: newSharedWith } },
     )
   }
 
   const fallbackIndex = fallbackSets.findIndex((setItem) => String(setItem._id) === String(setId))
   if (fallbackIndex >= 0) {
-    fallbackSets[fallbackIndex].sharedWith = fallbackSets[fallbackIndex].sharedWith || []
-    if (!fallbackSets[fallbackIndex].sharedWith.includes(String(userId))) {
-      fallbackSets[fallbackIndex].sharedWith.push(String(userId))
-    }
+    const sharedWith = normalizeSharedWithEntries(fallbackSets[fallbackIndex].sharedWith)
+    const newSharedWith = sharedWith.filter((entry) => String(entry.userId) !== normalizedUserId)
+    newSharedWith.push({ userId: normalizedUserId, role, email, name })
+    fallbackSets[fallbackIndex].sharedWith = newSharedWith
   }
 }
 
@@ -329,7 +583,17 @@ module.exports = {
   deleteTag,
   findUserDocumentTags,
   upsertUserDocumentTags,
+  normalizeSharedWithEntries,
+  sharedWithContainsUser,
+  getSharedRoleForUser,
+  shareDocumentWithOrg,
+  shareFolderWithOrg,
+  shareSetWithOrg,
   shareDocumentWithUser,
   shareFolderWithUser,
   shareSetWithUser,
+  removeDocumentShare,
+  removeFolderShare,
+  removeSetShare,
+  removeSharedWithEntries,
 }

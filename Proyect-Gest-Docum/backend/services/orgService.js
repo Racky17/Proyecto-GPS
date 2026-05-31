@@ -67,6 +67,22 @@ const addOrgMember = async (orgId, memberOrgId, role) => {
   return { value: fallbackOrganizations[idx] }
 }
 
+const removeOrganizationMember = async (orgId, memberId, memberType = 'user') => {
+  if (isMongoConnected() && collections.organizations) {
+    return collections.organizations.updateOne(
+      { _id: new ObjectId(orgId) },
+      { $pull: { members: { type: memberType, id: new ObjectId(memberId) } } },
+    )
+  }
+
+  const idx = fallbackOrganizations.findIndex((o) => String(o._id) === String(orgId))
+  if (idx === -1) return null
+  fallbackOrganizations[idx].members = (fallbackOrganizations[idx].members || []).filter(
+    (m) => !(m.type === memberType && String(m.id) === String(memberId)),
+  )
+  return { value: fallbackOrganizations[idx] }
+}
+
 const getOrganizationMembersExpanded = async (org) => {
   // org is organization doc
   if (!org || !Array.isArray(org.members)) return []
@@ -99,5 +115,6 @@ module.exports = {
   findOrganizationsForUser,
   addUserMember,
   addOrgMember,
+  removeOrganizationMember,
   getOrganizationMembersExpanded,
 }

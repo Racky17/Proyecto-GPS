@@ -8,6 +8,7 @@ const {
   findOrganizationsForUser,
   addUserMember,
   addOrgMember,
+  removeOrganizationMember,
   getOrganizationMembersExpanded,
 } = require('../services/orgService')
 
@@ -96,6 +97,34 @@ router.get('/api/organizations/:id', authenticate, async (req, res) => {
     res.json({ data: { ...org, members: membersExpanded } })
   } catch (error) {
     res.status(500).json({ message: 'Unable to load organization.' })
+  }
+})
+
+router.delete('/api/organizations/:id/members/:memberId', authenticate, async (req, res) => {
+  const orgId = req.params.id
+  const memberId = req.params.memberId
+  try {
+    const org = await findOrganizationById(orgId)
+    if (!org) return res.status(404).json({ message: 'Organization not found.' })
+
+    const requesterId = String(req.user._id)
+    const isOwner = String(org.ownerId) === requesterId
+    const isAdmin = Array.isArray(org.members) && org.members.some((m) => m.type === 'user' && String(m.id) === requesterId && m.role === 'administrator')
+    if (!isOwner && !isAdmin) return res.status(403).json({ message: 'Only owners or administrators can remove members.' })
+
+    if (String(org.ownerId) === String(memberId)) {
+      return res.status(400).json({ message: 'Cannot remove organization owner.' })
+    }
+
+    const member = Array.isArray(org.members) && org.members.find((m) => m.type === 'user' && String(m.id) === String(memberId))
+    if (!member) {
+      return res.status(404).json({ message: 'Member not found in organization.' })
+    }
+
+    await removeOrganizationMember(orgId, memberId)
+    res.json({ message: 'Member removed from organization.' })
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to remove member.' })
   }
 })
 
