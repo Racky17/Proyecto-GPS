@@ -1,10 +1,23 @@
 services:
-  main:
+  frontend:
     image: gps-upload
     build:
       context: Proyect-Gest-Docum
       dockerfile: ./Dockerfile
     environment:
       NODE_ENV: production
+    depends_on:
+      - backend
     ports:
-      - 2200:2200
+      - 8065:8065
+  backend:
+    image: gps-backend
+    build:
+      context: backend
+      dockerfile: ./Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: 8064
+      FRONTEND_ORIGIN: http://localhost:8065
+    ports:
+      - 8064:8064

@@ -56,7 +56,7 @@ const AppSidebar = () => {
 
     const loadSidebarData = async () => {
       try {
-        const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+        const apiBase = import.meta.env.VITE_API_BASE_URL || ''
         const [setsRes, tagsRes] = await Promise.all([
           fetch(`${apiBase}/api/user/sets`, {
             headers: { Authorization: `Bearer ${authToken}` },

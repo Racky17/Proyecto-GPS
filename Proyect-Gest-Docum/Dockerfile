@@ -1,10 +1,24 @@
-FROM node:lts-alpine AS build
-WORKDIR /usr/src/app
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+ARG VITE_API_BASE_URL=
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+
 COPY package*.json ./
-RUN npm install
-COPY . .
+RUN npm ci
+
+COPY . ./
 RUN npm run build
 
-EXPOSE 2200
+FROM nginx:alpine AS production
 
-CMD ["npm", "run", "start"]
+RUN apk add --no-cache curl
+
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/build /usr/share/nginx/html
+
+EXPOSE 8065
+
+HEALTHCHECK CMD curl --fail http://localhost/ || exit 1
+CMD ["nginx", "-g", "daemon off;"]

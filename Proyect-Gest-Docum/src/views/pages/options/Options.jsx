@@ -37,7 +37,7 @@ const Options = () => {
   }, [])
 
   const authToken = localStorage.getItem('authToken')
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+  const apiBase = import.meta.env.VITE_API_BASE_URL || ''
 
   const handleLanguageChange = (event) => {
     const selectedLanguage = event.target.value

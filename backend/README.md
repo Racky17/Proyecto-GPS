@@ -19,12 +19,7 @@ The server starts on `http://localhost:4000` by default.
 
 ## API Endpoints
 
-- `GET /api/health` - server health check
-- `GET /api/documents` - sample documents list or Mongo documents when available
-- `POST /api/auth/register` - create a new user
-- `POST /api/auth/login` - login and receive an auth token
-- `GET /api/user/documents` - retrieve documents for the authenticated user
-- `POST /api/user/documents` - save a document for the authenticated user. Supported fields: `title`, optional `folderId`, optional `setId`, optional file upload. Document text content is not required.
+ // todo
 
 ## Environment Variables
 

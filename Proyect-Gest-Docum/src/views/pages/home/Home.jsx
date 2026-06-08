@@ -37,7 +37,7 @@ import RevisionHistoryModal from './components/RevisionHistoryModal'
 import UploadDocumentModal from './components/UploadDocumentModal'
 import ShareModal from './components/ShareModal'
 
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+const apiBase = import.meta.env.VITE_API_BASE_URL || ''
 
 const Home = () => {
   const dispatch = useDispatch()

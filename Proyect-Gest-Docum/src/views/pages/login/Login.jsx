@@ -18,7 +18,9 @@ import CIcon from '@coreui/icons-react'
 import { cilLockLocked, cilUser } from '@coreui/icons'
 import { deriveKey, storeEncryptionKey } from 'src/utils/encryption'
 
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
+const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+
+console.log('API Base URL:', apiBase)
 
 const Login = () => {
   const [username, setUsername] = useState('')
