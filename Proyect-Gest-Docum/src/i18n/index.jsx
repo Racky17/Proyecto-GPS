@@ -74,6 +74,8 @@ const translations = {
     home_download: 'Download',
     home_revert: 'Revert',
     home_noRevisionHistory: 'No revision actions yet.',
+    home_updateHeader: 'Update document',
+    home_updateDesc: 'Choose a new file to update the current document.',
 
     shome_share: 'Share',
     shome_set: 'project',
@@ -180,6 +182,8 @@ const translations = {
     home_download: 'Descargar',
     home_revert: 'Revertir',
     home_noRevisionHistory: 'Sin historial de cambios.',
+    home_updateHeader: 'Actualizar documento',
+    home_updateDesc: 'Selecciona un nuevo archivo para actualizar el documento actual.',
 
     shome_share: 'Compartir',
     shome_set: 'proyecto',
