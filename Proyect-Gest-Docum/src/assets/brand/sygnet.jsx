@@ -1,7 +1,9 @@
 export const sygnet = [
   '102 115',
-  `<g style="fill: currentColor">
-    <path d="M96 24.124 57 1.608a12 12 0 0 0-12 0L6 24.124a12.034 12.034 0 0 0-6 10.393V79.55a12.033 12.033 0 0 0 6 10.392l39 22.517a12 12 0 0 0 12 0l39-22.517a12.033 12.033 0 0 0 6-10.392V34.517a12.034 12.034 0 0 0-6-10.393ZM94 79.55a4 4 0 0 1-2 3.464l-39 22.517a4 4 0 0 1-4 0L10 83.014a4 4 0 0 1-2-3.464V34.517a4 4 0 0 1 2-3.464L49 8.536a4 4 0 0 1 4 0l39 22.517a4 4 0 0 1 2 3.464V79.55Z"/>
-    <path d="M74.022 70.071h-2.866a4 4 0 0 0-1.925.494L51.95 80.05 32 68.531V45.554l19.95-11.519 17.29 9.455a4 4 0 0 0 1.919.49h2.863a2 2 0 0 0 2-2v-2.71a2 2 0 0 0-1.04-1.756L55.793 27.02a8.04 8.04 0 0 0-7.843.09L28 38.626a8.025 8.025 0 0 0-4 6.929V68.53a8 8 0 0 0 4 6.928l19.95 11.519a8.043 8.043 0 0 0 7.843.088l19.19-10.532a2 2 0 0 0 1.038-1.753v-2.71a2 2 0 0 0-2-2Z"/>
-  </g>`,
+  `<g class="layer">
+  <title>Layer 1</title>
+  <ellipse cx="50.68" cy="55.86" fill="#cccccc" id="svg_7" rx="40.64" ry="41.86" stroke="#ff7f00" stroke-dasharray="null" stroke-linecap="null" stroke-linejoin="null" stroke-width="5" transform="matrix(1, 0, 0, 1, 0, 0)" x="53"/>
+  <path d="m40.5,61.86l21.61,14.19l-14.64,24.74l-6.97,-38.93z" fill="#56aaff" fill-opacity="null" id="svg_15" stroke="#00007f" stroke-dasharray="null" stroke-linecap="null" stroke-linejoin="null" stroke-opacity="null" stroke-width="3"/>
+  <path d="m41.36,59.97l13.92,-48.41l5.69,61.7l-19.61,-13.3l0,0.01z" fill="#ff5656" fill-opacity="null" id="svg_16" stroke="#7f0000" stroke-dasharray="null" stroke-linecap="null" stroke-linejoin="null" stroke-opacity="null" stroke-width="3" transform="matrix(1, 0, 0, 1, 0, 0)"/>
+ </g>`,
 ]
