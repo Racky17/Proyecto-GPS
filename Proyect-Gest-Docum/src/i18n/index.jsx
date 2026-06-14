@@ -76,6 +76,15 @@ const translations = {
     home_noRevisionHistory: 'No revision actions yet.',
     home_updateHeader: 'Update document',
     home_updateDesc: 'Choose a new file to update the current document.',
+    home_updateButton: 'Update Document',
+    home_pinned: 'Pinned',
+
+    tag_notags: 'No tags yet. Add one in Options.',
+    tag_loading: 'Loading tags...',
+    tag_pin: 'Pin',
+    tag_unpin: 'Unpin',
+    tag_manage: '+ Manage tags',
+    tag_pinhelp: 'Pinning keeps this folder at the top of its set or parent location.',
 
     shome_share: 'Share',
     shome_set: 'project',
@@ -184,6 +193,15 @@ const translations = {
     home_noRevisionHistory: 'Sin historial de cambios.',
     home_updateHeader: 'Actualizar documento',
     home_updateDesc: 'Selecciona un nuevo archivo para actualizar el documento actual.',
+    home_updateButton: 'Actualizar Documento',
+    home_pinned: 'Fijado',
+
+    tag_notags: 'Sin etiquetas. Añade más en configuración.',
+    tag_loading: 'Cargando etiquetas...',
+    tag_pin: 'Fijar',
+    tag_unpin: 'Fijado',
+    tag_manage: '+ Editar etiquetas',
+    tag_pinhelp: 'Fijar una carpeta la mostrará antes que las demás en su lugar.',
 
     shome_share: 'Compartir',
     shome_set: 'proyecto',

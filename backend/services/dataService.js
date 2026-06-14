@@ -221,6 +221,24 @@ const updateDocument = async (documentId, updateFields) => {
   return { value: fallbackDocs[fallbackIndex] }
 }
 
+const updateFolder = async (folderId, updateFields) => {
+  if (isMongoConnected() && collections.folders) {
+    return collections.folders.findOneAndUpdate(
+      { _id: new ObjectId(folderId) },
+      { $set: updateFields },
+      { returnDocument: 'after' },
+    )
+  }
+
+  const fallbackIndex = fallbackFolders.findIndex((folder) => String(folder._id) === String(folderId))
+  if (fallbackIndex === -1) {
+    return { value: null }
+  }
+
+  fallbackFolders[fallbackIndex] = { ...fallbackFolders[fallbackIndex], ...updateFields }
+  return { value: fallbackFolders[fallbackIndex] }
+}
+
 const insertFolder = async (folder) => {
   if (isMongoConnected() && collections.folders) {
     return collections.folders.insertOne(folder)
@@ -575,6 +593,7 @@ module.exports = {
   findSetById,
   insertDocument,
   updateDocument,
+  updateFolder,
   insertFolder,
   insertSet,
   findTagsForUser,

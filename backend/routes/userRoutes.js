@@ -15,6 +15,7 @@ const {
   insertDocument,
   findDocumentForUser,
   updateDocument,
+  updateFolder,
   findDocumentById,
   findFolderById,
   findSetById,
@@ -677,6 +678,62 @@ router.put('/api/user/documents/:id/my-tags', authenticate, async (req, res) => 
     res.json({ data: { tags: sanitizedTags } })
   } catch (error) {
     res.status(500).json({ message: 'Unable to update document tags.' })
+  }
+})
+
+router.put('/api/user/documents/:id/pin', authenticate, async (req, res) => {
+  const documentId = req.params.id
+  const { pinned } = req.body
+
+  if (typeof pinned !== 'boolean') {
+    return res.status(400).json({ message: 'Pinned must be true or false.' })
+  }
+
+  try {
+    const existingDoc = await findDocumentById(documentId)
+    if (!existingDoc || existingDoc.deletedAt) {
+      return res.status(404).json({ message: 'Document not found.' })
+    }
+    if (!(await canPerformWriteAction(existingDoc, req.user))) {
+      return res.status(403).json({ message: 'You do not have permission to pin this document.' })
+    }
+
+    const result = await updateDocument(documentId, {
+      pinnedAt: pinned ? new Date() : null,
+      updatedAt: new Date(),
+    })
+
+    res.json({ data: result.value || result })
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to update document pin state.' })
+  }
+})
+
+router.put('/api/user/folders/:id/pin', authenticate, async (req, res) => {
+  const folderId = req.params.id
+  const { pinned } = req.body
+
+  if (typeof pinned !== 'boolean') {
+    return res.status(400).json({ message: 'Pinned must be true or false.' })
+  }
+
+  try {
+    const existingFolder = await findFolderById(folderId)
+    if (!existingFolder) {
+      return res.status(404).json({ message: 'Folder not found.' })
+    }
+    if (!(await canPerformWriteAction(existingFolder, req.user))) {
+      return res.status(403).json({ message: 'You do not have permission to pin this folder.' })
+    }
+
+    const result = await updateFolder(folderId, {
+      pinnedAt: pinned ? new Date() : null,
+      updatedAt: new Date(),
+    })
+
+    res.json({ data: result.value || result })
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to update folder pin state.' })
   }
 })
 

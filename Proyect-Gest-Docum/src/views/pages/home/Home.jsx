@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useDispatch } from 'react-redux'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   CButton,
   CCard,
@@ -99,10 +99,12 @@ const Home = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [showSearchDropdown, setShowSearchDropdown] = useState(false)
+  const [selectedTagId, setSelectedTagId] = useState(null)
   const searchRef = useRef(null)
 
   const authToken = localStorage.getItem('authToken')
   const authUser = JSON.parse(localStorage.getItem('authUser') || 'null')
+  const navigate = useNavigate()
   const userIdFromStorage = authUser
     ? String(authUser.id ?? authUser._id ?? authUser.userId ?? authUser.uid ?? '')
     : null
@@ -263,24 +265,24 @@ const Home = () => {
   }
 
   const renderTagMarkers = (item) => {
-    // For documents, use user-specific tags; for folders/sets, use document tags
     const itemTagIds =
       item._id && documentUserTags[item._id]
         ? documentUserTags[item._id].map(String)
         : Array.isArray(item.tags)
           ? item.tags.map(String)
           : []
-    if (itemTagIds.length === 0 || tags.length === 0) {
-      return null
-    }
-
     const matchedTags = tags.filter((tag) => itemTagIds.includes(String(tag._id)))
-    if (matchedTags.length === 0) {
+    if (!item || !item._id || (!item.pinnedAt && matchedTags.length === 0)) {
       return null
     }
 
     return (
-      <div className="d-flex flex-wrap gap-1 mt-3">
+      <div className="d-flex flex-wrap gap-1 mt-3 align-items-center">
+        {item.pinnedAt && (
+          <span className="rounded-pill border border-body-secondary px-2 py-1 small bg-warning text-dark">
+            📌 {t('home_pinned')}
+          </span>
+        )}
         {matchedTags.slice(0, 6).map((tag) => (
           <span
             key={tag._id}
@@ -301,6 +303,89 @@ const Home = () => {
     )
   }
 
+  const selectedTag = useMemo(
+    () => tags.find((tag) => String(tag._id) === String(selectedTagId)) || null,
+    [selectedTagId, tags],
+  )
+
+  const documentMatchesSelectedTag = (doc) => {
+    if (!selectedTagId) return true
+    const itemTagIds = Array.isArray(documentUserTags[doc._id])
+      ? documentUserTags[doc._id].map(String)
+      : []
+    return itemTagIds.includes(selectedTagId)
+  }
+
+  const getTaggedDocumentsForCurrentScope = () => {
+    if (!selectedTagId) return []
+    if (currentLocation.type === 'root') {
+      return documents.filter((doc) => documentMatchesSelectedTag(doc) && doc.setId)
+    }
+    if (currentLocation.type === 'set' && currentSet) {
+      return documents.filter(
+        (doc) => String(doc.setId) === String(currentSet._id) && documentMatchesSelectedTag(doc),
+      )
+    }
+    if (currentLocation.type === 'folder' && currentFolder) {
+      return documents.filter(
+        (doc) => String(doc.folderId) === String(currentFolder._id) && documentMatchesSelectedTag(doc),
+      )
+    }
+    return []
+  }
+
+  const clearTagFilter = () => {
+    const search = location.search || window.location.href.split('?')[1] || ''
+    const params = new URLSearchParams(search)
+    params.delete('tagId')
+    const nextSearch = params.toString() ? `?${params.toString()}` : ''
+    navigate(`${location.pathname}${nextSearch}`, { replace: true })
+  }
+
+  const sortByPinned = (items = []) => {
+    return [...items].sort((a, b) => {
+      const aPinned = Boolean(a?.pinnedAt)
+      const bPinned = Boolean(b?.pinnedAt)
+      if (aPinned !== bPinned) {
+        return bPinned ? 1 : -1
+      }
+      if (aPinned && bPinned) {
+        const aTime = new Date(a.pinnedAt).getTime() || 0
+        const bTime = new Date(b.pinnedAt).getTime() || 0
+        if (aTime !== bTime) return bTime - aTime
+      }
+      return String(a?.title || '').localeCompare(String(b?.title || ''))
+    })
+  }
+
+  const handleTogglePin = async (item, itemType = 'document') => {
+    if (!authToken || !item || !item._id) return
+    const endpoint = itemType === 'folder' ? `/api/user/folders/${item._id}/pin` : `/api/user/documents/${item._id}/pin`
+    try {
+      const response = await fetch(`${apiBase}${endpoint}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ pinned: !Boolean(item.pinnedAt) }),
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        setMessage(result.message || 'Unable to update pin state.')
+        return
+      }
+      if (itemType === 'folder') {
+        setFolders((prev) => prev.map((folder) => (String(folder._id) === String(item._id) ? result.data : folder)))
+      } else {
+        setDocuments((prev) => prev.map((doc) => (String(doc._id) === String(item._id) ? result.data : doc)))
+      }
+      setMessage(`${itemType.charAt(0).toUpperCase() + itemType.slice(1)} pin state updated.`)
+    } catch (error) {
+      setMessage('Unable to update pin state. Please try again.')
+    }
+  }
+
   useEffect(() => {
     fetchData()
     fetchTags()
@@ -311,6 +396,9 @@ const Home = () => {
     const search = location.search || window.location.href.split('?')[1] || ''
     const query = new URLSearchParams(search)
     const setId = query.get('setId')
+    const tagId = query.get('tagId')
+
+    setSelectedTagId(tagId ? String(tagId) : null)
 
     if (setId) {
       const setItem = sets.find((item) => String(item._id) === String(setId))
@@ -326,7 +414,7 @@ const Home = () => {
       setSelected({ type: null, id: null })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.key, sets])
+  }, [location.key, location.search, sets])
 
   useEffect(() => {
     if (!openTagPopoverDocId) {
@@ -1327,17 +1415,30 @@ const Home = () => {
           </div>
         </div>
 
-        {currentLocation.type !== 'root' && (
-          <div className="mb-4">
-            <CButton
-              color="secondary"
-              size="sm"
-              className="rounded-pill px-3"
-              onClick={handleGoBack}
-            >
-              <CIcon icon={cilArrowLeft} className="me-2" />
-              {t('home_backButton')}
-            </CButton>
+        {(currentLocation.type !== 'root' || selectedTagId) && (
+          <div className="mb-4 d-flex flex-wrap gap-2">
+            {currentLocation.type !== 'root' && (
+              <CButton
+                color="secondary"
+                size="sm"
+                className="rounded-pill px-3"
+                onClick={handleGoBack}
+              >
+                <CIcon icon={cilArrowLeft} className="me-2" />
+                {t('home_backButton')}
+              </CButton>
+            )}
+            {selectedTagId && (
+              <CButton
+                color="secondary"
+                size="sm"
+                className="rounded-pill px-3"
+                onClick={clearTagFilter}
+              >
+                <CIcon icon={cilTag} className="me-2" />
+                Clear tag filter
+              </CButton>
+            )}
           </div>
         )}
 
@@ -1524,7 +1625,7 @@ const Home = () => {
               <div className="text-center text-body-secondary">{t('home_emptySet')}</div>
             ) : (
               <>
-                {currentLocation.type === 'root' && (
+                {currentLocation.type === 'root' && !selectedTagId && (
                   <CRow className="g-3">
                     {sets.map((setItem) => {
                       const isSelected =
@@ -1562,14 +1663,157 @@ const Home = () => {
                     })}
                   </CRow>
                 )}
+                {currentLocation.type === 'root' && selectedTagId && (
+                  <>
+                    {getTaggedDocumentsForCurrentScope().length > 0 ? (
+                      <CRow className="g-3">
+                        {sortByPinned(getTaggedDocumentsForCurrentScope()).map((doc) => {
+                          const isSelected =
+                            selected.type === 'document' &&
+                            String(selected.id) === String(doc._id)
+                          return (
+                            <CCol xs={12} sm={6} lg={4} key={doc._id}>
+                              <div
+                                className={`h-100 d-flex flex-column p-3 rounded-4 ${
+                                  isSelected
+                                    ? 'bg-primary text-white'
+                                    : 'bg-body border border-body-secondary'
+                                }`}
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => handleSelectDocument(doc)}
+                                onDoubleClick={() => downloadDocument(doc)}
+                              >
+                                <div className="d-flex align-items-start gap-2 mb-3">
+                                  <CIcon icon={cilFile} className="fs-4" />
+                                  <div>
+                                    <div className="fw-semibold">{doc.title}</div>
+                                    {renderTagMarkers(doc)}
+                                  </div>
+                                </div>
+                                <div className="mt-auto">
+                                  <ItemActions
+                                    type="document"
+                                    item={doc}
+                                    onShare={openShareModal}
+                                    onMoreActions={moreActions}
+                                    shareLabel={t('home_shareButton')}
+                                    moreActionsPopover={
+                                      <DocumentActionPopover
+                                        doc={doc}
+                                        openMoreActionsDocId={openMoreActionsDocId}
+                                        setOpenMoreActionsDocId={setOpenMoreActionsDocId}
+                                        onOpenUpdateDocument={handleOpenDocumentUpdateModal}
+                                        onOpenRevisionHistory={handleOpenRevisionHistoryModal}
+                                        t={t}
+                                      />
+                                    }
+                                    tagPopover={
+                                      <DocumentTagPopover
+                                        item={doc}
+                                        itemType="document"
+                                        openTagPopoverDocId={openTagPopoverDocId}
+                                        setOpenTagPopoverDocId={setOpenTagPopoverDocId}
+                                        tags={tags}
+                                        loadingTags={loadingTags}
+                                        onToggleTag={handleToggleDocumentTag}
+                                        onTogglePin={handleTogglePin}
+                                        activeTagIds={documentUserTags[doc._id]}
+                                        pinned={Boolean(doc.pinnedAt)}
+                                        t={t}
+                                      />
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            </CCol>
+                          )
+                        })}
+                      </CRow>
+                    ) : (
+                      <div className="text-body-secondary">No documents match this tag.</div>
+                    )}
+                  </>
+                )}
 
-                {currentLocation.type === 'set' && currentSet && (
+                {currentLocation.type === 'set' && currentSet && selectedTagId && (
+                  <>
+                    {getTaggedDocumentsForCurrentScope().length > 0 ? (
+                      <CRow className="g-3">
+                        {sortByPinned(getTaggedDocumentsForCurrentScope()).map((doc) => {
+                          const isSelected =
+                            selected.type === 'document' &&
+                            String(selected.id) === String(doc._id)
+                          return (
+                            <CCol xs={12} sm={6} lg={4} key={doc._id}>
+                              <div
+                                className={`h-100 d-flex flex-column p-3 rounded-4 ${
+                                  isSelected
+                                    ? 'bg-primary text-white'
+                                    : 'bg-body border border-body-secondary'
+                                }`}
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => handleSelectDocument(doc)}
+                                onDoubleClick={() => downloadDocument(doc)}
+                              >
+                                <div className="d-flex align-items-start gap-2 mb-3">
+                                  <CIcon icon={cilFile} className="fs-4" />
+                                  <div>
+                                    <div className="fw-semibold">{doc.title}</div>
+                                    {renderTagMarkers(doc)}
+                                  </div>
+                                </div>
+                                <div className="mt-auto">
+                                  <ItemActions
+                                    type="document"
+                                    item={doc}
+                                    onShare={openShareModal}
+                                    onMoreActions={moreActions}
+                                    shareLabel={t('home_shareButton')}
+                                    moreActionsPopover={
+                                      <DocumentActionPopover
+                                        doc={doc}
+                                        openMoreActionsDocId={openMoreActionsDocId}
+                                        setOpenMoreActionsDocId={setOpenMoreActionsDocId}
+                                        onOpenUpdateDocument={handleOpenDocumentUpdateModal}
+                                        onOpenRevisionHistory={handleOpenRevisionHistoryModal}
+                                        t={t}
+                                      />
+                                    }
+                                    tagPopover={
+                                      <DocumentTagPopover
+                                        item={doc}
+                                        itemType="document"
+                                        openTagPopoverDocId={openTagPopoverDocId}
+                                        setOpenTagPopoverDocId={setOpenTagPopoverDocId}
+                                        tags={tags}
+                                        loadingTags={loadingTags}
+                                        onToggleTag={handleToggleDocumentTag}
+                                        onTogglePin={handleTogglePin}
+                                        activeTagIds={documentUserTags[doc._id]}
+                                        pinned={Boolean(doc.pinnedAt)}
+                                        t={t}
+                                      />
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            </CCol>
+                          )
+                        })}
+                      </CRow>
+                    ) : (
+                      <div className="text-body-secondary">No documents match this tag.</div>
+                    )}
+                  </>
+                )}
+
+                {currentLocation.type === 'set' && currentSet && !selectedTagId && (
                   <>
                     {(foldersBySet[String(currentSet._id)] || []).length > 0 ||
                     (docsBySet[String(currentSet._id)] || []).filter((doc) => !doc.folderId)
                       .length > 0 ? (
                       <CRow className="g-3">
-                        {(foldersBySet[String(currentSet._id)] || []).map((folder) => {
+                        {sortByPinned(foldersBySet[String(currentSet._id)] || []).map((folder) => {
                           const isSelected =
                             selected.type === 'folder' && String(selected.id) === String(folder._id)
                           return (
@@ -1597,35 +1841,46 @@ const Home = () => {
                                     onShare={openShareModal}
                                     onMoreActions={moreActions}
                                     shareLabel={t('home_shareButton')}
+                                    tagPopover={
+                                      <DocumentTagPopover
+                                        item={folder}
+                                        itemType="folder"
+                                        openTagPopoverDocId={openTagPopoverDocId}
+                                        setOpenTagPopoverDocId={setOpenTagPopoverDocId}
+                                        tags={[]}
+                                        loadingTags={false}
+                                        onTogglePin={handleTogglePin}
+                                        pinned={Boolean(folder.pinnedAt)}
+                                        t={t}
+                                      />
+                                    }
                                   />
                                 </div>
                               </div>
                             </CCol>
                           )
                         })}
-                        {(docsBySet[String(currentSet._id)] || [])
-                          .filter((doc) => !doc.folderId)
-                          .map((doc) => {
-                            const isSelected =
-                              selected.type === 'document' &&
-                              String(selected.id) === String(doc._id)
-                            return (
-                              <CCol xs={12} sm={6} lg={4} key={doc._id}>
-                                <div
-                                  className={`h-100 d-flex flex-column p-3 rounded-4 ${
-                                    isSelected
-                                      ? 'bg-primary text-white'
-                                      : 'bg-body border border-body-secondary'
-                                  }`}
-                                  style={{ cursor: 'pointer' }}
-                                  onClick={() => handleSelectDocument(doc)}
-                                  onDoubleClick={() => downloadDocument(doc)}
-                                >
-                                  <div className="d-flex align-items-start gap-2 mb-3">
-                                    <CIcon icon={cilFile} className="fs-4" />
-                                    <div>
-                                      <div className="fw-semibold">{doc.title}</div>
-                                      {renderTagMarkers(doc)}
+                        {sortByPinned((docsBySet[String(currentSet._id)] || []).filter((doc) => !doc.folderId)).map((doc) => {
+                          const isSelected =
+                            selected.type === 'document' &&
+                            String(selected.id) === String(doc._id)
+                          return (
+                            <CCol xs={12} sm={6} lg={4} key={doc._id}>
+                              <div
+                                className={`h-100 d-flex flex-column p-3 rounded-4 ${
+                                  isSelected
+                                    ? 'bg-primary text-white'
+                                    : 'bg-body border border-body-secondary'
+                                }`}
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => handleSelectDocument(doc)}
+                                onDoubleClick={() => downloadDocument(doc)}
+                              >
+                                <div className="d-flex align-items-start gap-2 mb-3">
+                                  <CIcon icon={cilFile} className="fs-4" />
+                                  <div>
+                                    <div className="fw-semibold">{doc.title}</div>
+                                    {renderTagMarkers(doc)}
                                     </div>
                                   </div>
                                   <div className="mt-auto">
@@ -1647,13 +1902,16 @@ const Home = () => {
                                       }
                                       tagPopover={
                                         <DocumentTagPopover
-                                          doc={doc}
+                                          item={doc}
+                                          itemType="document"
                                           openTagPopoverDocId={openTagPopoverDocId}
                                           setOpenTagPopoverDocId={setOpenTagPopoverDocId}
                                           tags={tags}
                                           loadingTags={loadingTags}
                                           onToggleTag={handleToggleDocumentTag}
+                                          onTogglePin={handleTogglePin}
                                           activeTagIds={documentUserTags[doc._id]}
+                                          pinned={Boolean(doc.pinnedAt)}
                                           t={t}
                                         />
                                       }
@@ -1672,9 +1930,9 @@ const Home = () => {
 
                 {currentLocation.type === 'folder' && currentFolder && (
                   <>
-                    {(docsByFolder[String(currentFolder._id)] || []).length > 0 ? (
+                    {(docsByFolder[String(currentFolder._id)] || []).filter(documentMatchesSelectedTag).length > 0 ? (
                       <CRow className="g-3">
-                        {(docsByFolder[String(currentFolder._id)] || []).map((doc) => {
+                        {sortByPinned((docsByFolder[String(currentFolder._id)] || []).filter(documentMatchesSelectedTag)).map((doc) => {
                           const isSelected =
                             selected.type === 'document' && String(selected.id) === String(doc._id)
                           return (
@@ -1715,13 +1973,16 @@ const Home = () => {
                                     }
                                     tagPopover={
                                       <DocumentTagPopover
-                                        doc={doc}
+                                        item={doc}
+                                        itemType="document"
                                         openTagPopoverDocId={openTagPopoverDocId}
                                         setOpenTagPopoverDocId={setOpenTagPopoverDocId}
                                         tags={tags}
                                         loadingTags={loadingTags}
                                         onToggleTag={handleToggleDocumentTag}
+                                        onTogglePin={handleTogglePin}
                                         activeTagIds={documentUserTags[doc._id]}
+                                        pinned={Boolean(doc.pinnedAt)}
                                         t={t}
                                       />
                                     }
