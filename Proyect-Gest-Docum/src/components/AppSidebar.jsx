@@ -50,6 +50,9 @@ const AppSidebar = () => {
     }
   }, [])
 
+  const location = useLocation()
+  const translatedNavigation = useMemo(() => getNavigation(t), [t])
+
   useEffect(() => {
     const authToken = localStorage.getItem('authToken')
     if (!authToken) return
@@ -76,10 +79,7 @@ const AppSidebar = () => {
     }
 
     loadSidebarData()
-  }, [])
-
-  const location = useLocation()
-  const translatedNavigation = useMemo(() => getNavigation(t), [t])
+  }, [location.pathname, location.search])
 
   const currentHomeQuery = useMemo(() => {
     const search = location.search || window.location.href.split('?')[1] || ''
@@ -138,7 +138,7 @@ const AppSidebar = () => {
     }
 
     return items
-  }, [navigation, sets, tags])
+  }, [translatedNavigation, sets, tags, currentHomeQuery, location.pathname])
 
   return (
     <CSidebar

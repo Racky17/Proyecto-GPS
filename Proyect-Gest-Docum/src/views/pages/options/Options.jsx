@@ -258,7 +258,7 @@ const Options = () => {
                 </select>
               </div>
               {languageMessage && (
-                <div className="small text-success">{languageMessage}</div>
+                <div className="small text-success">{t('opt_languageSaved')}</div>
               )}
             </CCardBody>
           </CCard>
