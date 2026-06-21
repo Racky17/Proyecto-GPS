@@ -5,11 +5,11 @@ import {
   CButton,
   CCard,
   CCardBody,
-  CCardGroup,
   CCol,
   CContainer,
   CForm,
   CFormInput,
+  CFormSelect,
   CInputGroup,
   CInputGroupText,
   CRow,
@@ -17,6 +17,7 @@ import {
 import CIcon from '@coreui/icons-react'
 import { cilLockLocked, cilUser } from '@coreui/icons'
 import { deriveKey, storeEncryptionKey } from 'src/utils/encryption'
+import { useLanguage } from '../../../i18n'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -28,6 +29,7 @@ const Login = () => {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const { t, language, setLanguage, availableLanguages } = useLanguage()
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -74,69 +76,84 @@ const Login = () => {
   }
 
   return (
-    <div className="bg-body-tertiary min-vh-100 d-flex flex-row align-items-center">
+    <div className="bg-body-tertiary min-vh-100 d-flex align-items-center py-5">
       <CContainer>
         <CRow className="justify-content-center">
-          <CCol md={8}>
-            <CCardGroup>
-              <CCard className="p-4">
-                <CCardBody>
-                  <CForm onSubmit={handleSubmit}>
-                    <h1>Login</h1>
-                    <p className="text-body-secondary">Sign in to your account</p>
+          <CCol xs={12} lg={10}>
+            <CRow className="g-4 align-items-stretch">
+              <CCol xs={12} lg={6}>
+                <CCard className="p-4 h-100">
+                  <CCardBody>
+                    <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+                      <div>
+                        <h1>{t('login_title')}</h1>
+                        <p className="text-body-secondary mb-0">{t('login_desc')}</p>
+                      </div>
+                      <CFormSelect
+                        value={language}
+                        onChange={(e) => setLanguage(e.target.value)}
+                        style={{ maxWidth: '14rem' }}
+                        aria-label="Language selector"
+                      >
+                        {availableLanguages.map((lang) => (
+                          <option key={lang.code} value={lang.code}>
+                            {lang.label}
+                          </option>
+                        ))}
+                      </CFormSelect>
+                    </div>
                     {error && <CAlert color="danger">{error}</CAlert>}
-                    <CInputGroup className="mb-3">
-                      <CInputGroupText>
-                        <CIcon icon={cilUser} />
-                      </CInputGroupText>
-                      <CFormInput
-                        placeholder="Username"
-                        autoComplete="username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                      />
-                    </CInputGroup>
-                    <CInputGroup className="mb-4">
-                      <CInputGroupText>
-                        <CIcon icon={cilLockLocked} />
-                      </CInputGroupText>
-                      <CFormInput
-                        type="password"
-                        placeholder="Password"
-                        autoComplete="current-password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                      />
-                    </CInputGroup>
-                    <CRow>
-                      <CCol xs={6}>
-                        <CButton color="primary" className="px-4" type="submit" disabled={loading}>
-                          {loading ? 'Signing in...' : 'Login'}
+                    <CForm onSubmit={handleSubmit}>
+                      <CInputGroup className="mb-3">
+                        <CInputGroupText>
+                          <CIcon icon={cilUser} />
+                        </CInputGroupText>
+                        <CFormInput
+                          placeholder={t('login_username')}
+                          autoComplete="username"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                        />
+                      </CInputGroup>
+                      <CInputGroup className="mb-4">
+                        <CInputGroupText>
+                          <CIcon icon={cilLockLocked} />
+                        </CInputGroupText>
+                        <CFormInput
+                          type="password"
+                          placeholder={t('login_password')}
+                          autoComplete="current-password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                        />
+                      </CInputGroup>
+                      <CRow className="align-items-center">
+                        <CCol xs={12} sm={6} className="mb-2 mb-sm-0">
+                          <CButton color="primary" className="w-100" type="submit" disabled={loading}>
+                            {loading ? t('login_signingIn') : t('login_button')}
+                          </CButton>
+                        </CCol>
+                      </CRow>
+                    </CForm>
+                  </CCardBody>
+                </CCard>
+              </CCol>
+              <CCol xs={12} lg={6}>
+                <CCard className="text-white bg-primary py-5 h-100">
+                  <CCardBody className="d-flex flex-column justify-content-center align-items-center text-center h-100 px-4">
+                    <div>
+                      <h2>{t('login_newHere')}</h2>
+                      <p>{t('login_newHereDesc')}</p>
+                      <Link to="/register">
+                        <CButton color="primary" className="mt-3" active tabIndex={-1}>
+                          {t('login_registerNow')}
                         </CButton>
-                      </CCol>
-                      <CCol xs={6} className="text-right">
-                        <CButton color="link" className="px-0" type="button">
-                          Forgot password?
-                        </CButton>
-                      </CCol>
-                    </CRow>
-                  </CForm>
-                </CCardBody>
-              </CCard>
-              <CCard className="text-white bg-primary py-5" style={{ width: '44%' }}>
-                <CCardBody className="text-center">
-                  <div>
-                    <h2>New here?</h2>
-                    <p>Create an account to start managing documents and projects.</p>
-                    <Link to="/register">
-                      <CButton color="primary" className="mt-3" active tabIndex={-1}>
-                        Register Now!
-                      </CButton>
-                    </Link>
-                  </div>
-                </CCardBody>
-              </CCard>
-            </CCardGroup>
+                      </Link>
+                    </div>
+                  </CCardBody>
+                </CCard>
+              </CCol>
+            </CRow>
           </CCol>
         </CRow>
       </CContainer>
