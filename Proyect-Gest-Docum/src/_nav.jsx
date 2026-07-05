@@ -51,12 +51,6 @@ const navigationConfig = [
   },
   {
     component: CNavItem,
-    namekey: 'sbar_recent',
-    to: '/',
-    icon: <CIcon icon={cilFolderOpen} customClassName="nav-icon" />,
-  },
-  {
-    component: CNavItem,
     namekey: 'sbar_shared',
     to: '/shared',
     icon: <CIcon icon={cilShareAll} customClassName="nav-icon" />,

@@ -8,6 +8,7 @@ const DocumentActionPopover = ({
   setOpenMoreActionsDocId,
   onOpenUpdateDocument,
   onOpenRevisionHistory,
+  onDeleteDocument,
   t,
 }) => {
   const isVisible = openMoreActionsDocId === String(doc._id)
@@ -35,6 +36,18 @@ const DocumentActionPopover = ({
               }}
             >
               {t('home_updateDocument') || 'Update document'}
+            </CButton>
+            <CButton
+              color="danger"
+              size="sm"
+              className="rounded-pill"
+              onClick={(event) => {
+                event.stopPropagation()
+                setOpenMoreActionsDocId(null)
+                onDeleteDocument(doc)
+              }}
+            >
+              {t('home_delete') || 'Delete'}
             </CButton>
             <CButton
               color="secondary"
@@ -75,6 +88,7 @@ DocumentActionPopover.propTypes = {
   setOpenMoreActionsDocId: PropTypes.func.isRequired,
   onOpenUpdateDocument: PropTypes.func.isRequired,
   onOpenRevisionHistory: PropTypes.func.isRequired,
+  onDeleteDocument: PropTypes.func.isRequired,
   t: PropTypes.func.isRequired,
 }
 

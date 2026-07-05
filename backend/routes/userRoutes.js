@@ -16,6 +16,8 @@ const {
   findDocumentForUser,
   updateDocument,
   updateFolder,
+  deleteFolder,
+  deleteSet,
   findDocumentById,
   findFolderById,
   findSetById,
@@ -528,6 +530,46 @@ router.delete('/api/user/documents/:id', authenticate, async (req, res) => {
     res.json({ message: 'Document deleted successfully.' })
   } catch (error) {
     res.status(500).json({ message: 'Unable to delete document.' })
+  }
+})
+
+router.delete('/api/user/folders/:id', authenticate, async (req, res) => {
+  const folderId = req.params.id
+
+  try {
+    const existingFolder = await findFolderById(folderId)
+    if (!existingFolder || existingFolder.deletedAt || String(existingFolder.ownerId) !== String(req.user._id)) {
+      return res.status(404).json({ message: 'Folder not found.' })
+    }
+
+    const result = await deleteFolder(folderId, req.user._id)
+    if (isMongoConnected() && !result.value) {
+      return res.status(404).json({ message: 'Folder not found.' })
+    }
+
+    res.json({ message: 'Folder deleted successfully.' })
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to delete folder.' })
+  }
+})
+
+router.delete('/api/user/sets/:id', authenticate, async (req, res) => {
+  const setId = req.params.id
+
+  try {
+    const existingSet = await findSetById(setId)
+    if (!existingSet || existingSet.deletedAt || String(existingSet.ownerId) !== String(req.user._id)) {
+      return res.status(404).json({ message: 'Set not found.' })
+    }
+
+    const result = await deleteSet(setId, req.user._id)
+    if (isMongoConnected() && !result.value) {
+      return res.status(404).json({ message: 'Set not found.' })
+    }
+
+    res.json({ message: 'Set deleted successfully.' })
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to delete set.' })
   }
 })
 

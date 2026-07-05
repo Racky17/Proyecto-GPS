@@ -31,6 +31,7 @@ import {
 import { useLanguage } from '../../../i18n'
 
 import ItemActions from './components/ItemActions'
+import DeleteItemPopover from './components/DeleteItemPopover'
 import DocumentTagPopover from './components/DocumentTagPopover'
 import DocumentActionPopover from './components/DocumentActionPopover'
 import RevisionHistoryModal from './components/RevisionHistoryModal'
@@ -92,8 +93,9 @@ const Home = () => {
   const [shareModalRole, setShareModalRole] = useState('read-only')
   const [shareModalError, setShareModalError] = useState('')
   const [dragActive, setDragActive] = useState(false)
-  const [selectedUploadFile, setSelectedUploadFile] = useState(null)
+  const [selectedUploadFiles, setSelectedUploadFiles] = useState([])
   const fileInputRef = useRef(null)
+  const folderInputRef = useRef(null)
 
   // Search state and dropdown
   const [searchQuery, setSearchQuery] = useState('')
@@ -356,6 +358,72 @@ const Home = () => {
       }
       return String(a?.title || '').localeCompare(String(b?.title || ''))
     })
+  }
+
+  const collectDroppedFiles = async (dataTransfer) => {
+    if (!dataTransfer) return []
+
+    const items = Array.from(dataTransfer.items || [])
+    if (items.length === 0) {
+      return Array.from(dataTransfer.files || []).filter(Boolean)
+    }
+
+    const collectedFiles = []
+
+    const readDirectoryEntries = async (directoryReader) => {
+      return new Promise((resolve) => {
+        directoryReader.readEntries(resolve)
+      })
+    }
+
+    const walkEntry = async (entry, relativePath = '') => {
+      if (!entry) return
+
+      if (entry.isFile) {
+        await new Promise((resolve) => {
+          entry.file(
+            (file) => {
+              if (relativePath && !file.webkitRelativePath) {
+                try {
+                  Object.defineProperty(file, 'webkitRelativePath', {
+                    value: `${relativePath}${file.name}`,
+                  })
+                } catch (error) {
+                  // ignore read-only file implementations
+                }
+              }
+              collectedFiles.push(file)
+              resolve()
+            },
+            () => resolve(),
+          )
+        })
+        return
+      }
+
+      if (entry.isDirectory) {
+        const directoryReader = entry.createReader()
+        const directoryPath = `${relativePath}${entry.name}/`
+
+        while (true) {
+          const entries = await readDirectoryEntries(directoryReader)
+          if (!entries.length) break
+
+          for (const childEntry of entries) {
+            await walkEntry(childEntry, directoryPath)
+          }
+        }
+      }
+    }
+
+    for (const item of items) {
+      const entry = item.webkitGetAsEntry?.()
+      if (entry) {
+        await walkEntry(entry)
+      }
+    }
+
+    return collectedFiles.length ? collectedFiles : Array.from(dataTransfer.files || []).filter(Boolean)
   }
 
   const handleTogglePin = async (item, itemType = 'document') => {
@@ -946,8 +1014,62 @@ const Home = () => {
     }
   }
 
-  const moreActions = (type, item) => {
-    setMessage(`More actions for ${type} '${item.title}' coming soon.`)
+  const moreActions = () => {}
+
+  const getDeleteEndpoint = (type, itemId) => {
+    if (type === 'document') return `/api/user/documents/${itemId}`
+    if (type === 'folder') return `/api/user/folders/${itemId}`
+    if (type === 'set') return `/api/user/sets/${itemId}`
+    return null
+  }
+
+  const handleDeleteItem = async (type, item) => {
+    if (!authToken) {
+      setMessage(`You must be logged in to delete ${type}s.`)
+      return
+    }
+
+    const endpoint = getDeleteEndpoint(type, item?._id)
+    if (!endpoint) {
+      setMessage(`Unable to delete ${type}.`)
+      return
+    }
+
+    if (!window.confirm(t('home_deleteConfirm') || 'Are you sure? This is irreversible.')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`${apiBase}${endpoint}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.message || `Unable to delete ${type}.`)
+      }
+
+      if (type === 'document' && String(selected.id) === String(item._id)) {
+        setSelected({ type: null, id: null })
+      }
+      if (type === 'folder' && currentLocation.type === 'folder' && String(currentLocation.id) === String(item._id)) {
+        setCurrentLocation(item.setId ? { type: 'set', id: item.setId } : { type: 'root', id: null })
+        setSelected({ type: null, id: null })
+      }
+      if (type === 'set' && currentLocation.type === 'set' && String(currentLocation.id) === String(item._id)) {
+        setCurrentLocation({ type: 'root', id: null })
+        setSelected({ type: null, id: null })
+      }
+
+      setOpenMoreActionsDocId(null)
+      setOpenTagPopoverDocId(null)
+      await fetchData()
+      setMessage(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully.`)
+    } catch (error) {
+      setMessage(error.message || `Unable to delete ${type}.`)
+    }
   }
 
   const handleOpenDocumentUpdateModal = (doc) => {
@@ -959,6 +1081,8 @@ const Home = () => {
     setOpenTagPopoverDocId(null)
     setShowDocumentUpdateModal(true)
   }
+
+  const handleDeleteDocument = (doc) => handleDeleteItem('document', doc)
 
   const handleCloseDocumentUpdateModal = () => {
     setShowDocumentUpdateModal(false)
@@ -1180,7 +1304,7 @@ const Home = () => {
       return
     }
     setMessage('')
-    setSelectedUploadFile(null)
+    setSelectedUploadFiles([])
     setDragActive(false)
     setShowDocumentUploadModal(true)
   }
@@ -1188,23 +1312,30 @@ const Home = () => {
   const handleCloseDocumentUploadModal = () => {
     setShowDocumentUploadModal(false)
     setDragActive(false)
-    setSelectedUploadFile(null)
-  }
-
-  const handleFileInputChange = (event) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      setSelectedUploadFile(file)
-      setMessage('')
+    setSelectedUploadFiles([])
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+    if (folderInputRef.current) {
+      folderInputRef.current.value = ''
     }
   }
 
-  const handleDocumentDrop = (event) => {
+  const handleFileInputChange = (event) => {
+    const files = Array.from(event.target.files || []).filter(Boolean)
+    if (files.length) {
+      setSelectedUploadFiles(files)
+      setMessage('')
+    }
+    event.target.value = ''
+  }
+
+  const handleDocumentDrop = async (event) => {
     event.preventDefault()
     setDragActive(false)
-    const file = event.dataTransfer?.files?.[0]
-    if (file) {
-      setSelectedUploadFile(file)
+    const files = await collectDroppedFiles(event.dataTransfer)
+    if (files.length) {
+      setSelectedUploadFiles(files)
       setMessage('')
     }
   }
@@ -1219,8 +1350,8 @@ const Home = () => {
   }
 
   const handleUploadDocument = async () => {
-    if (!selectedUploadFile) {
-      setMessage('Please select a file before uploading.')
+    if (!selectedUploadFiles.length) {
+      setMessage('Please select one or more files before uploading.')
       return
     }
     if (!authToken) {
@@ -1232,35 +1363,60 @@ const Home = () => {
       return
     }
 
-    const formData = new FormData()
-    formData.append('file', selectedUploadFile)
-    formData.append('title', selectedUploadFile.name)
-    if (currentLocationInfo.folderId) {
-      formData.append('folderId', currentLocationInfo.folderId)
-    }
-    if (currentLocationInfo.setId) {
-      formData.append('setId', currentLocationInfo.setId)
+    const uploadedFiles = []
+    const failedFiles = []
+
+    for (const file of selectedUploadFiles) {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('title', file.webkitRelativePath || file.name)
+      if (currentLocationInfo.folderId) {
+        formData.append('folderId', currentLocationInfo.folderId)
+      }
+      if (currentLocationInfo.setId) {
+        formData.append('setId', currentLocationInfo.setId)
+      }
+
+      try {
+        const response = await fetch(`${apiBase}/api/user/documents`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: formData,
+        })
+        const result = await response.json()
+        if (!response.ok) {
+          failedFiles.push({ file, message: result.message || 'Unable to upload document.' })
+          continue
+        }
+        uploadedFiles.push(file)
+      } catch (error) {
+        failedFiles.push({ file, message: 'Unable to upload document. Please try again.' })
+      }
     }
 
-    try {
-      const response = await fetch(`${apiBase}/api/user/documents`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: formData,
-      })
-      const result = await response.json()
-      if (!response.ok) {
-        setMessage(result.message || 'Unable to upload document.')
-        return
-      }
+    if (uploadedFiles.length) {
       fetchData()
-      setMessage(`Document '${selectedUploadFile.name}' uploaded successfully.`)
-      handleCloseDocumentUploadModal()
-    } catch (error) {
-      setMessage('Unable to upload document. Please try again.')
     }
+
+    if (failedFiles.length === 0) {
+      const uploadedCount = uploadedFiles.length
+      setMessage(
+        uploadedCount === 1
+          ? `Document '${uploadedFiles[0].name}' uploaded successfully.`
+          : `${uploadedCount} documents uploaded successfully.`,
+      )
+      handleCloseDocumentUploadModal()
+      return
+    }
+
+    setSelectedUploadFiles(failedFiles.map(({ file }) => file))
+    setMessage(
+      uploadedFiles.length
+        ? `${uploadedFiles.length} documents uploaded. ${failedFiles.length} failed.`
+        : failedFiles[0].message,
+    )
   }
 
   const foldersBySet = useMemo(() => {
@@ -1490,7 +1646,10 @@ const Home = () => {
           onDrop={handleDocumentDrop}
           onFileChange={handleFileInputChange}
           fileInputRef={fileInputRef}
-          selectedUploadFile={selectedUploadFile}
+          folderInputRef={folderInputRef}
+          selectedUploadFile={selectedUploadFiles}
+          allowMultiple
+          folderButtonLabel={t('home_uploadChooseFolder')}
           t={t}
         />
 
@@ -1655,6 +1814,15 @@ const Home = () => {
                                 onShare={openShareModal}
                                 onMoreActions={moreActions}
                                 shareLabel={t('home_shareButton')}
+                                moreActionsPopover={
+                                  <DeleteItemPopover
+                                    item={setItem}
+                                    openItemId={openMoreActionsDocId}
+                                    setOpenItemId={setOpenMoreActionsDocId}
+                                    onDeleteItem={(item) => handleDeleteItem('set', item)}
+                                    t={t}
+                                  />
+                                }
                               />
                             </div>
                           </div>
@@ -1704,6 +1872,7 @@ const Home = () => {
                                         setOpenMoreActionsDocId={setOpenMoreActionsDocId}
                                         onOpenUpdateDocument={handleOpenDocumentUpdateModal}
                                         onOpenRevisionHistory={handleOpenRevisionHistoryModal}
+                                        onDeleteDocument={handleDeleteDocument}
                                         t={t}
                                       />
                                     }
@@ -1841,6 +2010,15 @@ const Home = () => {
                                     onShare={openShareModal}
                                     onMoreActions={moreActions}
                                     shareLabel={t('home_shareButton')}
+                                    moreActionsPopover={
+                                      <DeleteItemPopover
+                                        item={folder}
+                                        openItemId={openMoreActionsDocId}
+                                        setOpenItemId={setOpenMoreActionsDocId}
+                                        onDeleteItem={(item) => handleDeleteItem('folder', item)}
+                                        t={t}
+                                      />
+                                    }
                                     tagPopover={
                                       <DocumentTagPopover
                                         item={folder}
@@ -1897,6 +2075,7 @@ const Home = () => {
                                           setOpenMoreActionsDocId={setOpenMoreActionsDocId}
                                           onOpenUpdateDocument={handleOpenDocumentUpdateModal}
                                           onOpenRevisionHistory={handleOpenRevisionHistoryModal}
+                                          onDeleteDocument={handleDeleteDocument}
                                           t={t}
                                         />
                                       }
@@ -1968,6 +2147,7 @@ const Home = () => {
                                         setOpenMoreActionsDocId={setOpenMoreActionsDocId}
                                         onOpenUpdateDocument={handleOpenDocumentUpdateModal}
                                         onOpenRevisionHistory={handleOpenRevisionHistoryModal}
+                                        onDeleteDocument={handleDeleteDocument}
                                         t={t}
                                       />
                                     }
