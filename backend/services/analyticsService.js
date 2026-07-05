@@ -52,6 +52,53 @@ const collectOrgUserIds = async (org) => {
   return Array.from(resolved)
 }
 
+const hasOrgShare = (sharedWith, orgId) => {
+  const normalizedOrgId = String(orgId)
+  return normalizeSharedWithEntries(sharedWith).some(
+    (entry) => entry.type === 'org' && String(entry.orgId) === normalizedOrgId,
+  )
+}
+
+const getOrgSharedPlacementIds = async (orgId) => {
+  const organizationId = String(orgId)
+
+  if (isMongoConnected()) {
+    const [sharedSets, sharedFolders] = await Promise.all([
+      collections.sets
+        ? collections.sets.find({ deletedAt: { $exists: false }, 'sharedWith.orgId': new ObjectId(organizationId) }).project({ _id: 1 }).toArray()
+        : [],
+      collections.folders
+        ? collections.folders.find({ deletedAt: { $exists: false }, 'sharedWith.orgId': new ObjectId(organizationId) }).project({ _id: 1, setId: 1 }).toArray()
+        : [],
+    ])
+
+    const sharedSetIds = sharedSets.map((setItem) => String(setItem._id))
+    const sharedFolderIds = sharedFolders.map((folder) => String(folder._id))
+    const sharedFolderSetIds = sharedFolders
+      .filter((folder) => folder.setId)
+      .map((folder) => String(folder.setId))
+
+    return {
+      sharedSetIds,
+      sharedFolderIds,
+      sharedFolderSetIds,
+    }
+  }
+
+  const sharedSets = fallbackSets.filter(
+    (setItem) => !setItem.deletedAt && hasOrgShare(setItem.sharedWith, organizationId),
+  )
+  const sharedFolders = fallbackFolders.filter(
+    (folder) => !folder.deletedAt && hasOrgShare(folder.sharedWith, organizationId),
+  )
+
+  return {
+    sharedSetIds: sharedSets.map((setItem) => String(setItem._id)),
+    sharedFolderIds: sharedFolders.map((folder) => String(folder._id)),
+    sharedFolderSetIds: sharedFolders.filter((folder) => folder.setId).map((folder) => String(folder.setId)),
+  }
+}
+
 const getDateBucket = (date, interval = 'daily') => {
   if (!date || Number.isNaN(date.getTime())) return null
   const year = date.getUTCFullYear()
@@ -139,26 +186,32 @@ const buildTrend = (docs, interval = 'daily', dateField = 'createdAt') => {
 const findDocumentsForOrg = async (orgId) => {
   const org = await findOrganizationById(orgId)
   if (!org) return []
-
-  const memberIds = await collectOrgUserIds(org)
   const organizationId = String(orgId)
+  const { sharedSetIds, sharedFolderIds, sharedFolderSetIds } = await getOrgSharedPlacementIds(orgId)
 
   if (isMongoConnected() && collections.documents) {
+    const sharedSetObjectIds = sharedSetIds
+      .filter((id) => ObjectId.isValid(String(id)))
+      .map((id) => new ObjectId(id))
+    const sharedFolderObjectIds = sharedFolderIds
+      .filter((id) => ObjectId.isValid(String(id)))
+      .map((id) => new ObjectId(id))
+    const sharedFolderSetObjectIds = sharedFolderSetIds
+      .filter((id) => ObjectId.isValid(String(id)))
+      .map((id) => new ObjectId(id))
+
     const orClauses = [
       { 'sharedWith.orgId': new ObjectId(organizationId) },
     ]
 
-    if (memberIds.length > 0) {
-      const memberObjectIds = memberIds
-        .filter((id) => ObjectId.isValid(String(id)))
-        .map((id) => new ObjectId(id))
-
-      if (memberObjectIds.length > 0) {
-        orClauses.push({ ownerId: { $in: memberObjectIds } })
-        orClauses.push({ userId: { $in: memberObjectIds } })
-        orClauses.push({ sharedWith: { $in: memberObjectIds } })
-        orClauses.push({ 'sharedWith.userId': { $in: memberObjectIds } })
-      }
+    if (sharedSetObjectIds.length > 0) {
+      orClauses.push({ setId: { $in: sharedSetObjectIds } })
+    }
+    if (sharedFolderObjectIds.length > 0) {
+      orClauses.push({ folderId: { $in: sharedFolderObjectIds } })
+    }
+    if (sharedFolderSetObjectIds.length > 0) {
+      orClauses.push({ setId: { $in: sharedFolderSetObjectIds } })
     }
 
     return collections.documents.find({
@@ -172,10 +225,10 @@ const findDocumentsForOrg = async (orgId) => {
   return fallbackDocs.filter((doc) => {
     if (doc.deletedAt) return false
     const sharedEntries = normalizeSharedWithEntries(doc.sharedWith)
-    const ownMatch = memberIds.includes(String(doc.ownerId)) || memberIds.includes(String(doc.userId))
     const orgMatch = sharedEntries.some((entry) => entry.type === 'org' && String(entry.orgId) === organizationId)
-    const userMatch = sharedEntries.some((entry) => entry.type === 'user' && memberIds.includes(String(entry.userId)))
-    return ownMatch || orgMatch || userMatch
+    const setMatch = sharedSetIds.includes(String(doc.setId)) || sharedFolderSetIds.includes(String(doc.setId))
+    const folderMatch = sharedFolderIds.includes(String(doc.folderId))
+    return orgMatch || setMatch || folderMatch
   })
 }
 

@@ -7,6 +7,7 @@ const {
   updateTag,
   deleteTag,
   findUserDocumentTags,
+  findUserDocumentTagsForDocuments,
   upsertUserDocumentTags,
   findDocumentById,
 } = require('../../services/dataService')
@@ -108,6 +109,21 @@ router.get('/api/user/documents/:id/my-tags', authenticate, async (req, res) => 
   try {
     const userTags = await findUserDocumentTags(req.user._id, documentId)
     res.json({ data: userTags?.tags || [] })
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to load document tags.' })
+  }
+})
+
+router.post('/api/user/documents/my-tags', authenticate, async (req, res) => {
+  const { documentIds } = req.body
+
+  if (!Array.isArray(documentIds)) {
+    return res.status(400).json({ message: 'Document IDs must be an array.' })
+  }
+
+  try {
+    const tagsByDocument = await findUserDocumentTagsForDocuments(req.user._id, documentIds)
+    res.json({ data: tagsByDocument })
   } catch (error) {
     res.status(500).json({ message: 'Unable to load document tags.' })
   }

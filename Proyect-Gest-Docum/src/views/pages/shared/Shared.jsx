@@ -44,6 +44,7 @@ const Shared = () => {
   const [selectedDocId, setSelectedDocId] = useState(null)
 
   const authToken = localStorage.getItem('authToken')
+  const DOCUMENT_TAG_BATCH_SIZE = 50
   const authUser = useMemo(() => {
     try {
       return JSON.parse(localStorage.getItem('authUser') || 'null')
@@ -90,19 +91,32 @@ const Shared = () => {
     if (!authToken || !Array.isArray(docs) || docs.length === 0) return
     try {
       setLoadingTags(true)
-      const tagPromises = docs.map((doc) =>
-        fetch(`${apiBase}/api/user/documents/${doc._id}/my-tags`, {
-          headers: { Authorization: `Bearer ${authToken}` },
-        })
-          .then((res) => res.json())
-          .then((result) => ({ docId: doc._id, tags: Array.isArray(result.data) ? result.data : [] }))
-          .catch(() => ({ docId: doc._id, tags: [] })),
-      )
-      const results = await Promise.all(tagPromises)
+      const documentIds = docs.map((doc) => String(doc._id)).filter(Boolean)
+      const batches = []
+      for (let index = 0; index < documentIds.length; index += DOCUMENT_TAG_BATCH_SIZE) {
+        batches.push(documentIds.slice(index, index + DOCUMENT_TAG_BATCH_SIZE))
+      }
+
       const tagsMap = {}
-      results.forEach(({ docId, tags: docTags }) => {
-        tagsMap[docId] = docTags.map(String)
-      })
+      for (const batch of batches) {
+        const response = await fetch(`${apiBase}/api/user/documents/my-tags`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ documentIds: batch }),
+        })
+        const result = await response.json()
+        if (!response.ok) {
+          continue
+        }
+
+        Object.entries(result.data || {}).forEach(([docId, docTags]) => {
+          tagsMap[String(docId)] = Array.isArray(docTags) ? docTags.map(String) : []
+        })
+      }
+
       setDocumentUserTags(tagsMap)
     } catch (err) {
       // ignore

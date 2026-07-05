@@ -428,6 +428,30 @@ const findUserDocumentTags = async (userId, documentId) => {
   )
 }
 
+const findUserDocumentTagsForDocuments = async (userId, documentIds = []) => {
+  const normalizedDocumentIds = [...new Set((Array.isArray(documentIds) ? documentIds : []).map(String).filter(Boolean))]
+  if (normalizedDocumentIds.length === 0) return {}
+
+  if (isMongoConnected() && collections.userDocumentTags) {
+    const records = await collections.userDocumentTags.find({
+      userId: new ObjectId(userId),
+      documentId: { $in: normalizedDocumentIds.map((id) => new ObjectId(id)) },
+    }).toArray()
+
+    return records.reduce((acc, record) => {
+      acc[String(record.documentId)] = Array.isArray(record.tags) ? record.tags.map(String) : []
+      return acc
+    }, {})
+  }
+
+  return fallbackUserDocumentTags.reduce((acc, record) => {
+    if (String(record.userId) !== String(userId)) return acc
+    if (!normalizedDocumentIds.includes(String(record.documentId))) return acc
+    acc[String(record.documentId)] = Array.isArray(record.tags) ? record.tags.map(String) : []
+    return acc
+  }, {})
+}
+
 const upsertUserDocumentTags = async (userId, documentId, tags) => {
   if (isMongoConnected() && collections.userDocumentTags) {
     return collections.userDocumentTags.findOneAndUpdate(
@@ -709,6 +733,7 @@ module.exports = {
   updateTag,
   deleteTag,
   findUserDocumentTags,
+  findUserDocumentTagsForDocuments,
   upsertUserDocumentTags,
   normalizeSharedWithEntries,
   sharedWithContainsUser,

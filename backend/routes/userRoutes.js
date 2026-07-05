@@ -277,9 +277,17 @@ router.post('/api/user/documents', authenticate, upload.single('file'), async (r
     const document = {
       userId: req.user._id,
       ownerId: req.user._id,
-      sharedWith: sharedWith.map((entry) =>
-        isMongoConnected() ? { userId: new ObjectId(entry.userId), role: entry.role } : entry,
-      ),
+      sharedWith: sharedWith.map((entry) => {
+        if (entry.type === 'org') {
+          return isMongoConnected()
+            ? { orgId: new ObjectId(entry.orgId), role: entry.role, name: entry.name || null }
+            : { orgId: String(entry.orgId), role: entry.role, name: entry.name || null }
+        }
+
+        return isMongoConnected()
+          ? { userId: new ObjectId(entry.userId), role: entry.role, email: entry.email || null, name: entry.name || null }
+          : { userId: String(entry.userId), role: entry.role, email: entry.email || null, name: entry.name || null }
+      }),
       title,
       folderId: folderId || null,
       setId: setId || null,

@@ -8,6 +8,7 @@ import {
   CModalFooter,
   CModalHeader,
   CModalTitle,
+  CSpinner,
 } from '@coreui/react'
 
 const UploadDocumentModal = ({
@@ -29,6 +30,7 @@ const UploadDocumentModal = ({
   selectedFilesLabel,
   allowMultiple,
   folderButtonLabel,
+  uploadInProgress,
   t,
 }) => {
   const selectedFiles = Array.isArray(selectedUploadFile)
@@ -40,6 +42,7 @@ const UploadDocumentModal = ({
     || (selectedFiles.length > 1
       ? t('home_uploadButtonMany') || 'Upload Documents'
       : t('home_uploadButton'))
+  const loadingLabel = t('home_uploading') || 'Uploading...'
 
   return (
     <CModal visible={visible} size="lg" onClose={onClose} backdrop="static">
@@ -53,29 +56,49 @@ const UploadDocumentModal = ({
             dragActive ? 'border-primary bg-primary bg-opacity-10' : 'border-body-secondary'
           }`}
           style={{ minHeight: '200px', cursor: 'pointer' }}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-          onDrop={onDrop}
-          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(event) => {
+            if (!uploadInProgress) {
+              onDragOver(event)
+            }
+          }}
+          onDragLeave={(event) => {
+            if (!uploadInProgress) {
+              onDragLeave(event)
+            }
+          }}
+          onDrop={(event) => {
+            if (!uploadInProgress) {
+              onDrop(event)
+            }
+          }}
+          onClick={() => {
+            if (!uploadInProgress) {
+              fileInputRef.current?.click()
+            }
+          }}
         >
           <div className="h-100 d-flex flex-column align-items-center justify-content-center gap-3">
-            <div className="fw-semibold">{t('home_uploadDropfiles')}</div>
+            <div className="fw-semibold">{t('home_uploadDropfile')}</div>
             <div className="text-body-secondary">{t('home_uploadOr')}</div>
             <CButton
               color="secondary"
               size="sm"
+              disabled={uploadInProgress}
               onClick={(event) => {
                 event.stopPropagation()
-                fileInputRef.current?.click()
+                if (!uploadInProgress) {
+                  fileInputRef.current?.click()
+                }
               }}
             >
-              {t('home_uploadChooses')}
+              {t('home_uploadChoose')}
             </CButton>
             <input
               type="file"
               ref={fileInputRef}
               hidden
               multiple={allowMultiple}
+              disabled={uploadInProgress}
               onChange={onFileChange}
             />
             {folderInputRef && (
@@ -84,9 +107,12 @@ const UploadDocumentModal = ({
                   color="secondary"
                   size="sm"
                   variant="outline"
+                  disabled={uploadInProgress}
                   onClick={(event) => {
                     event.stopPropagation()
-                    folderInputRef.current?.click()
+                    if (!uploadInProgress) {
+                      folderInputRef.current?.click()
+                    }
                   }}
                 >
                   {folderButtonLabel || t('home_uploadChooseFolder')}
@@ -96,9 +122,16 @@ const UploadDocumentModal = ({
                   ref={folderInputRef}
                   hidden
                   webkitdirectory=""
+                  disabled={uploadInProgress}
                   onChange={onFileChange}
                 />
               </>
+            )}
+            {uploadInProgress && (
+              <div className="d-flex align-items-center gap-2 text-primary small">
+                <CSpinner size="sm" />
+                <span>{loadingLabel}</span>
+              </div>
             )}
             {selectedFiles.length ? (
               <div className="text-body-secondary small text-start">
@@ -127,11 +160,11 @@ const UploadDocumentModal = ({
         </div>
       </CModalBody>
       <CModalFooter>
-        <CButton color="secondary" onClick={onClose}>
+        <CButton color="secondary" onClick={onClose} disabled={uploadInProgress}>
           {t('home_cancel')}
         </CButton>
-        <CButton color="primary" onClick={onUpload}>
-          {resolvedUploadButtonLabel}
+        <CButton color="primary" onClick={onUpload} disabled={uploadInProgress}>
+          {uploadInProgress ? loadingLabel : resolvedUploadButtonLabel}
         </CButton>
       </CModalFooter>
     </CModal>
@@ -157,6 +190,7 @@ UploadDocumentModal.propTypes = {
   selectedFilesLabel: PropTypes.string,
   allowMultiple: PropTypes.bool,
   folderButtonLabel: PropTypes.string,
+  uploadInProgress: PropTypes.bool,
   t: PropTypes.func.isRequired,
 }
 
@@ -170,6 +204,7 @@ UploadDocumentModal.defaultProps = {
   allowMultiple: false,
   folderButtonLabel: null,
   folderInputRef: null,
+  uploadInProgress: false,
 }
 
 export default UploadDocumentModal

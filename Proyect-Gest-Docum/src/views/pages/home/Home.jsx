@@ -94,8 +94,10 @@ const Home = () => {
   const [shareModalError, setShareModalError] = useState('')
   const [dragActive, setDragActive] = useState(false)
   const [selectedUploadFiles, setSelectedUploadFiles] = useState([])
+  const [uploadInProgress, setUploadInProgress] = useState(false)
   const fileInputRef = useRef(null)
   const folderInputRef = useRef(null)
+  const lastSyncedLocationRef = useRef('')
 
   // Search state and dropdown
   const [searchQuery, setSearchQuery] = useState('')
@@ -149,6 +151,8 @@ const Home = () => {
     }
     return null
   }, [currentLocation, currentFolder])
+
+  const DOCUMENT_TAG_BATCH_SIZE = 50
 
   const fetchData = async () => {
     if (!authToken) return
@@ -211,21 +215,32 @@ const Home = () => {
   const fetchUserDocumentTags = async (docs) => {
     if (!authToken || !Array.isArray(docs) || docs.length === 0) return
     try {
-      const tagPromises = docs.map((doc) =>
-        fetch(`${apiBase}/api/user/documents/${doc._id}/my-tags`, {
+      const documentIds = docs.map((doc) => String(doc._id)).filter(Boolean)
+      const batches = []
+      for (let index = 0; index < documentIds.length; index += DOCUMENT_TAG_BATCH_SIZE) {
+        batches.push(documentIds.slice(index, index + DOCUMENT_TAG_BATCH_SIZE))
+      }
+
+      const tagsMap = {}
+      for (const batch of batches) {
+        const response = await fetch(`${apiBase}/api/user/documents/my-tags`, {
+          method: 'POST',
           headers: {
+            'Content-Type': 'application/json',
             Authorization: `Bearer ${authToken}`,
           },
+          body: JSON.stringify({ documentIds: batch }),
         })
-          .then((res) => res.json())
-          .then((result) => ({ docId: doc._id, tags: result.data || [] }))
-          .catch(() => ({ docId: doc._id, tags: [] })),
-      )
-      const results = await Promise.all(tagPromises)
-      const tagsMap = {}
-      results.forEach(({ docId, tags }) => {
-        tagsMap[docId] = tags
-      })
+        const result = await response.json()
+        if (!response.ok) {
+          continue
+        }
+
+        Object.entries(result.data || {}).forEach(([docId, tags]) => {
+          tagsMap[String(docId)] = Array.isArray(tags) ? tags.map(String) : []
+        })
+      }
+
       setDocumentUserTags(tagsMap)
     } catch (error) {
       // silently fail
@@ -462,6 +477,12 @@ const Home = () => {
 
   useEffect(() => {
     const search = location.search || window.location.href.split('?')[1] || ''
+    const syncKey = `${location.pathname}|${search}|${location.hash || ''}`
+    if (lastSyncedLocationRef.current === syncKey) {
+      return
+    }
+    lastSyncedLocationRef.current = syncKey
+
     const query = new URLSearchParams(search)
     const setId = query.get('setId')
     const tagId = query.get('tagId')
@@ -482,7 +503,7 @@ const Home = () => {
       setSelected({ type: null, id: null })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.key, location.search, sets])
+  }, [location.key, location.pathname, location.search, location.hash, sets])
 
   useEffect(() => {
     if (!openTagPopoverDocId) {
@@ -1303,6 +1324,9 @@ const Home = () => {
       setMessage('Select a set or folder before adding a new document.')
       return
     }
+    if (uploadInProgress) {
+      return
+    }
     setMessage('')
     setSelectedUploadFiles([])
     setDragActive(false)
@@ -1310,6 +1334,9 @@ const Home = () => {
   }
 
   const handleCloseDocumentUploadModal = () => {
+    if (uploadInProgress) {
+      return
+    }
     setShowDocumentUploadModal(false)
     setDragActive(false)
     setSelectedUploadFiles([])
@@ -1349,7 +1376,54 @@ const Home = () => {
     setDragActive(false)
   }
 
+  const findFolderInCurrentSet = (folderTitle) => {
+    if (!currentLocationInfo?.setId || !folderTitle) return null
+    const normalizedTitle = String(folderTitle).trim().toLowerCase()
+    return folders.find(
+      (folder) =>
+        String(folder.setId) === String(currentLocationInfo.setId) &&
+        String(folder.title || '').trim().toLowerCase() === normalizedTitle,
+    )
+  }
+
+  const ensureUploadFolder = async (folderTitle, createdFolderCache) => {
+    if (!currentLocationInfo?.setId || !folderTitle) return null
+
+    const cacheKey = String(folderTitle).trim().toLowerCase()
+    if (createdFolderCache.has(cacheKey)) {
+      return createdFolderCache.get(cacheKey)
+    }
+
+    const existingFolder = findFolderInCurrentSet(folderTitle)
+    if (existingFolder) {
+      createdFolderCache.set(cacheKey, existingFolder)
+      return existingFolder
+    }
+
+    const response = await fetch(`${apiBase}/api/user/folders`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        title: String(folderTitle).trim(),
+        setId: currentLocationInfo.setId,
+      }),
+    })
+    const result = await response.json()
+    if (!response.ok) {
+      throw new Error(result.message || 'Unable to create folder for uploaded files.')
+    }
+
+    createdFolderCache.set(cacheKey, result.data)
+    return result.data
+  }
+
   const handleUploadDocument = async () => {
+    if (uploadInProgress) {
+      return
+    }
     if (!selectedUploadFiles.length) {
       setMessage('Please select one or more files before uploading.')
       return
@@ -1365,19 +1439,40 @@ const Home = () => {
 
     const uploadedFiles = []
     const failedFiles = []
+    setUploadInProgress(true)
 
-    for (const file of selectedUploadFiles) {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('title', file.webkitRelativePath || file.name)
-      if (currentLocationInfo.folderId) {
-        formData.append('folderId', currentLocationInfo.folderId)
-      }
-      if (currentLocationInfo.setId) {
-        formData.append('setId', currentLocationInfo.setId)
-      }
+    try {
+      const createdFolderCache = new Map()
 
-      try {
+      for (const file of selectedUploadFiles) {
+        const relativePath = String(file.webkitRelativePath || file.name || '')
+        const relativeParts = relativePath.split('/').filter(Boolean)
+        const fileName = relativeParts.length > 0 ? relativeParts[relativeParts.length - 1] : file.name
+        let targetFolderId = currentLocationInfo.folderId || null
+
+        if (currentLocation.type === 'set' && relativeParts.length > 1) {
+          const topFolderName = relativeParts[0]
+          const uploadFolder = await ensureUploadFolder(topFolderName, createdFolderCache)
+          targetFolderId = uploadFolder?._id || null
+        }
+
+        if (currentLocation.type === 'folder' && currentFolder && relativeParts.length > 1) {
+          const currentFolderName = String(currentFolder.title || '').trim().toLowerCase()
+          if (relativeParts[0].trim().toLowerCase() === currentFolderName) {
+            targetFolderId = currentFolder._id
+          }
+        }
+
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('title', fileName)
+        if (targetFolderId) {
+          formData.append('folderId', targetFolderId)
+        }
+        if (currentLocationInfo.setId) {
+          formData.append('setId', currentLocationInfo.setId)
+        }
+
         const response = await fetch(`${apiBase}/api/user/documents`, {
           method: 'POST',
           headers: {
@@ -1391,9 +1486,9 @@ const Home = () => {
           continue
         }
         uploadedFiles.push(file)
-      } catch (error) {
-        failedFiles.push({ file, message: 'Unable to upload document. Please try again.' })
       }
+    } catch (error) {
+      failedFiles.push({ file: null, message: 'Unable to upload document. Please try again.' })
     }
 
     if (uploadedFiles.length) {
@@ -1402,6 +1497,7 @@ const Home = () => {
 
     if (failedFiles.length === 0) {
       const uploadedCount = uploadedFiles.length
+      setUploadInProgress(false)
       setMessage(
         uploadedCount === 1
           ? `Document '${uploadedFiles[0].name}' uploaded successfully.`
@@ -1411,7 +1507,8 @@ const Home = () => {
       return
     }
 
-    setSelectedUploadFiles(failedFiles.map(({ file }) => file))
+    setUploadInProgress(false)
+    setSelectedUploadFiles(failedFiles.map(({ file }) => file).filter(Boolean))
     setMessage(
       uploadedFiles.length
         ? `${uploadedFiles.length} documents uploaded. ${failedFiles.length} failed.`
@@ -1650,6 +1747,7 @@ const Home = () => {
           selectedUploadFile={selectedUploadFiles}
           allowMultiple
           folderButtonLabel={t('home_uploadChooseFolder')}
+          uploadInProgress={uploadInProgress}
           t={t}
         />
 
@@ -1695,25 +1793,25 @@ const Home = () => {
         >
           <CModalHeader>
             <CModalTitle>
-              {createItemType === 'folder' ? 'Create and Share Folder' : 'Create and Share Set'}
+              {createItemType === 'folder' ? t('home_create') + t('home_folder') : t('home_create') + t('home_set')}
             </CModalTitle>
           </CModalHeader>
           <CModalBody>
             <div className="mb-3 text-body-secondary">
               {createItemType === 'folder'
-                ? 'Create a new folder and optionally share it by email or with one of your organizations.'
-                : 'Create a new set and optionally share it by email or with one of your organizations.'}
+                ? t('home_createDesc') + t('home_folder') + t('home_createDescEnd')
+                : t('home_createDesc') + t('home_set') + t('home_createDescEnd')}
             </div>
             {createModalError && <div className="mb-3 text-danger">{createModalError}</div>}
             <CFormInput
               className="mb-3"
-              placeholder={createItemType === 'folder' ? 'Folder name' : 'Set name'}
+              placeholder={createItemType === 'folder' ? t('home_createName') + t('home_folder') : t('home_createName') + t('home_set')}
               value={createItemTitle}
               onChange={(e) => setCreateItemTitle(e.target.value)}
             />
             <CFormInput
               className="mb-3"
-              placeholder="Share with email"
+              placeholder={t('home_createSharewith')}
               value={createShareTargetEmail}
               onChange={(e) => setCreateShareTargetEmail(e.target.value)}
             />
@@ -1723,8 +1821,8 @@ const Home = () => {
                 onChange={(e) => setCreateShareRole(e.target.value)}
               >
                 <option value="admin">Admin</option>
-                <option value="write">Write</option>
-                <option value="read-only">Read-only</option>
+                <option value="write">{t('home_write')}</option>
+                <option value="read-only">{t('home_readonly')}</option>
               </CFormSelect>
             </div>
             <div className="mb-3">
@@ -1732,7 +1830,7 @@ const Home = () => {
                 value={createShareOrgId}
                 onChange={(e) => setCreateShareOrgId(e.target.value)}
               >
-                <option value="">Share with an organization</option>
+                <option value="">{t('home_createSharewithOrg')}</option>
                 {organizations.map((org) => (
                   <option key={String(org._id)} value={String(org._id)}>
                     {org.name || org.title || `Organization ${org._id}`}
@@ -1740,7 +1838,7 @@ const Home = () => {
                 ))}
               </CFormSelect>
               {loadingOrgs && (
-                <div className="text-body-secondary small mt-2">Loading organizations...</div>
+                <div className="text-body-secondary small mt-2">{t('shome_loading')}</div>
               )}
             </div>
           </CModalBody>
@@ -1749,7 +1847,7 @@ const Home = () => {
               {t('home_cancel')}
             </CButton>
             <CButton color="primary" onClick={handleCreateShareSubmit}>
-              {createItemType === 'folder' ? 'Create Folder' : 'Create Set'}
+              {createItemType === 'folder' ? t('home_createButton') + t('home_folder') : t('home_createButton') + t('home_set')}
             </CButton>
           </CModalFooter>
         </CModal>
