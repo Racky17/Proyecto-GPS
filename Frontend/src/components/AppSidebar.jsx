@@ -98,7 +98,6 @@ const AppSidebar = () => {
     return `/?${params.toString()}`
   }
 
-
   const sidebarItems = useMemo(() => {
     const items = [...translatedNavigation]
 
@@ -166,7 +165,10 @@ const AppSidebar = () => {
 
       <div className="sidebar-user px-3 py-3 border-bottom text-white">
         <div className="text-uppercase small text-secondary text-truncate">{t('sbar_user')}</div>
-        <div className="fw-semibold text-truncate" title={currentUser?.email || t('sbar_userNotSigned')}>
+        <div
+          className="fw-semibold text-truncate"
+          title={currentUser?.email || t('sbar_userNotSigned')}
+        >
           {currentUser?.email || t('sbar_userNotSigned')}
         </div>
       </div>

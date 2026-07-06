@@ -203,8 +203,8 @@ const Shared = () => {
       item._id && documentUserTags[item._id]
         ? documentUserTags[item._id].map(String)
         : Array.isArray(item.tags)
-        ? item.tags.map(String)
-        : []
+          ? item.tags.map(String)
+          : []
 
     const matchedTags = tags.filter((tag) => itemTagIds.includes(String(tag._id)))
     if (!item || !item._id || (!item.pinnedAt && matchedTags.length === 0)) {
@@ -288,7 +288,9 @@ const Shared = () => {
         setMessage(result.message || 'Unable to update pin state.')
         return
       }
-      setDocuments((prev) => prev.map((doc) => (String(doc._id) === String(item._id) ? result.data : doc)))
+      setDocuments((prev) =>
+        prev.map((doc) => (String(doc._id) === String(item._id) ? result.data : doc)),
+      )
       setMessage('Document pin state updated.')
     } catch (error) {
       setMessage('Unable to update pin state. Please try again.')
@@ -392,7 +394,10 @@ const Shared = () => {
     return normalizeSharedWithEntries(item.sharedWith).map((entry) => {
       if (entry.type === 'user') {
         const userId = String(entry.userId || '')
-        const ownerLabel = userId === currentUserIdLocal ? t('shar_you') || 'You' : entry.name || entry.email || userId
+        const ownerLabel =
+          userId === currentUserIdLocal
+            ? t('shar_you') || 'You'
+            : entry.name || entry.email || userId
         const details = entry.role ? `${ownerLabel} (${entry.role})` : ownerLabel
         return { ...entry, id: userId, label: details }
       }
@@ -452,15 +457,17 @@ const Shared = () => {
 
       setShareModalItem((prevItem) => {
         if (!prevItem) return prevItem
-        const updatedSharedWith = normalizeSharedWithEntries(prevItem.sharedWith).filter((existing) => {
-          if (entry.type === 'user') {
-            return String(existing.userId) !== String(entry.userId)
-          }
-          if (entry.type === 'org') {
-            return String(existing.orgId) !== String(entry.orgId)
-          }
-          return true
-        })
+        const updatedSharedWith = normalizeSharedWithEntries(prevItem.sharedWith).filter(
+          (existing) => {
+            if (entry.type === 'user') {
+              return String(existing.userId) !== String(entry.userId)
+            }
+            if (entry.type === 'org') {
+              return String(existing.orgId) !== String(entry.orgId)
+            }
+            return true
+          },
+        )
         return {
           ...prevItem,
           sharedWith: updatedSharedWith,
@@ -488,7 +495,9 @@ const Shared = () => {
     })
     const result = await response.json()
     if (!response.ok) {
-      throw new Error(result.message || t('shar_sharefail') || `Unable to share document with ${email}.`)
+      throw new Error(
+        result.message || t('shar_sharefail') || `Unable to share document with ${email}.`,
+      )
     }
     return email.trim()
   }
@@ -505,7 +514,9 @@ const Shared = () => {
       return
     }
     if (!shareModalEmail.trim() && !shareModalOrgId) {
-      setShareModalError(t('shar_sharewithrequired') || 'Enter an email or choose an organization to share with.')
+      setShareModalError(
+        t('shar_sharewithrequired') || 'Enter an email or choose an organization to share with.',
+      )
       return
     }
 
@@ -516,16 +527,20 @@ const Shared = () => {
         sharedParts.push(`user ${shareModalEmail.trim()}`)
       }
       if (shareModalOrgId) {
-        const response = await fetch(`${apiBase}${getShareEndpoint('document', shareModalItem._id)}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
+        const response = await fetch(
+          `${apiBase}${getShareEndpoint('document', shareModalItem._id)}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${authToken}`,
+            },
+            body: JSON.stringify({ targetOrgId: shareModalOrgId, role: shareModalRole }),
           },
-          body: JSON.stringify({ targetOrgId: shareModalOrgId, role: shareModalRole }),
-        })
+        )
         const r = await response.json()
-        if (!response.ok) throw new Error(r.message || t('shar_sharefail') || 'Unable to share organization')
+        if (!response.ok)
+          throw new Error(r.message || t('shar_sharefail') || 'Unable to share organization')
         sharedParts.push(`organization ${shareModalOrgId}`)
       }
       await fetchData()
@@ -569,7 +584,9 @@ const Shared = () => {
   }
 
   const handleOpenRevisionHistoryModal = () => {
-    setMessage(t('shar_revisionUnsupported') || 'Revision history is not available on shared items.')
+    setMessage(
+      t('shar_revisionUnsupported') || 'Revision history is not available on shared items.',
+    )
     setOpenMoreActionsDocId(null)
   }
 

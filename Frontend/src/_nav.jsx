@@ -12,9 +12,16 @@
 
 import React from 'react'
 import CIcon from '@coreui/icons-react'
-import { cilFolderOpen, cilHome, cilLibrary, cilSettings, cilShareAll, cilTag, cilBuilding} from '@coreui/icons'
+import {
+  cilFolderOpen,
+  cilHome,
+  cilLibrary,
+  cilSettings,
+  cilShareAll,
+  cilTag,
+  cilBuilding,
+} from '@coreui/icons'
 import { CNavItem, CNavTitle } from '@coreui/react'
-
 
 /**
  * Navigation menu structure array

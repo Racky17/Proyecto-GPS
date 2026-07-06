@@ -38,8 +38,9 @@ const UploadDocumentModal = ({
     : selectedUploadFile
       ? [selectedUploadFile]
       : []
-  const resolvedUploadButtonLabel = uploadButtonLabel
-    || (selectedFiles.length > 1
+  const resolvedUploadButtonLabel =
+    uploadButtonLabel ||
+    (selectedFiles.length > 1
       ? t('home_uploadButtonMany') || 'Upload Documents'
       : t('home_uploadButton'))
   const loadingLabel = t('home_uploading') || 'Uploading...'

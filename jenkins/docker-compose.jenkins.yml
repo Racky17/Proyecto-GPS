@@ -1,0 +1,25 @@
+# Levanta un Jenkins LTS local con Node.js 20 preinstalado para
+# ejecutar el Jenkinsfile de este repositorio.
+#
+#   cd jenkins
+#   docker compose -f docker-compose.jenkins.yml up -d --build
+#
+# Luego abrir http://localhost:8080 (la contraseña inicial se obtiene con:
+#   docker exec gps-jenkins cat /var/jenkins_home/secrets/initialAdminPassword)
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile.jenkins
+    container_name: gps-jenkins
+    restart: unless-stopped
+    ports:
+      - 8080:8080
+      - 50000:50000
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      # Permite a Jenkins usar el Docker del host para la etapa de imágenes
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  jenkins_home:

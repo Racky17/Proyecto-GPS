@@ -1,0 +1,18 @@
+# Imagen de Jenkins LTS con Node.js 20 y CLI de Docker,
+# lista para ejecutar el Jenkinsfile del proyecto.
+FROM jenkins/jenkins:lts-jdk17
+
+USER root
+
+# Node.js 20 (para npm ci / jest / vite) y docker-cli (para validar imágenes)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs docker.io \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+USER jenkins
+
+# Plugins recomendados para pipelines declarativos y Git
+RUN jenkins-plugin-cli --plugins "workflow-aggregator git github timestamper"

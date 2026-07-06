@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   CAlert,
@@ -20,8 +20,7 @@ import { deriveKey, storeEncryptionKey } from 'src/utils/encryption'
 import { useLanguage } from '../../../i18n'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || ''
-
-console.log('API Base URL:', apiBase)
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
 
 const Login = () => {
   const [username, setUsername] = useState('')
@@ -30,6 +29,80 @@ const Login = () => {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const { t, language, setLanguage, availableLanguages } = useLanguage()
+  const googleButtonRef = useRef(null)
+
+  const finishLogin = useCallback(
+    (result) => {
+      localStorage.setItem('authToken', result.token)
+      localStorage.setItem('authUser', JSON.stringify(result.user))
+      const savedUserId = result.user.id ?? result.user._id
+      if (savedUserId) {
+        localStorage.setItem('userId', savedUserId)
+      }
+      navigate('/')
+    },
+    [navigate],
+  )
+
+  const handleGoogleCredential = useCallback(
+    async (googleResponse) => {
+      setError('')
+      setLoading(true)
+      try {
+        const response = await fetch(`${apiBase}/api/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential: googleResponse.credential }),
+        })
+        const result = await response.json()
+        if (!response.ok) {
+          setError(result.message || t('login_googleError'))
+          setLoading(false)
+          return
+        }
+        finishLogin(result)
+      } catch (err) {
+        setError(t('login_googleError'))
+        setLoading(false)
+      }
+    },
+    [finishLogin, t],
+  )
+
+  // Carga Google Identity Services y renderiza el botón oficial
+  useEffect(() => {
+    if (!googleClientId || !googleButtonRef.current) {
+      return undefined
+    }
+
+    const renderButton = () => {
+      if (!window.google?.accounts?.id || !googleButtonRef.current) return
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: handleGoogleCredential,
+      })
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: 'outline',
+        size: 'large',
+        width: 320,
+      })
+    }
+
+    if (window.google?.accounts?.id) {
+      renderButton()
+      return undefined
+    }
+
+    const script = document.createElement('script')
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    script.onload = renderButton
+    document.head.appendChild(script)
+    return () => {
+      script.onload = null
+    }
+  }, [handleGoogleCredential])
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -62,13 +135,7 @@ const Login = () => {
         }
       }
 
-      localStorage.setItem('authToken', result.token)
-      localStorage.setItem('authUser', JSON.stringify(result.user))
-      const savedUserId = result.user.id ?? result.user._id
-      if (savedUserId) {
-        localStorage.setItem('userId', savedUserId)
-      }
-      navigate('/')
+      finishLogin(result)
     } catch (err) {
       setError('Unable to connect to backend. Please try again.')
       setLoading(false)
@@ -129,12 +196,27 @@ const Login = () => {
                       </CInputGroup>
                       <CRow className="align-items-center">
                         <CCol xs={12} sm={6} className="mb-2 mb-sm-0">
-                          <CButton color="primary" className="w-100" type="submit" disabled={loading}>
+                          <CButton
+                            color="primary"
+                            className="w-100"
+                            type="submit"
+                            disabled={loading}
+                          >
                             {loading ? t('login_signingIn') : t('login_button')}
                           </CButton>
                         </CCol>
                       </CRow>
                     </CForm>
+                    {googleClientId && (
+                      <>
+                        <div className="d-flex align-items-center my-4">
+                          <hr className="flex-grow-1" />
+                          <span className="px-3 text-body-secondary">{t('login_or')}</span>
+                          <hr className="flex-grow-1" />
+                        </div>
+                        <div ref={googleButtonRef} className="d-flex justify-content-center" />
+                      </>
+                    )}
                   </CCardBody>
                 </CCard>
               </CCol>

@@ -8,7 +8,7 @@ const translations = {
     opt_title: 'Options',
     opt_signeduser: 'Signed in as:',
     opt_unknownuser: 'Unknown user',
-    opt_optionsdesc: 'Use this page to manage your account\'s details or logout.',
+    opt_optionsdesc: "Use this page to manage your account's details or logout.",
     opt_logout: 'Log out',
     opt_language: 'Language',
     opt_currentLanguage: 'Current language',
@@ -18,7 +18,8 @@ const translations = {
     opt_languageSaved: 'Language preference saved succesfully.',
     opt_manageTags: 'Manage Tags',
     opt_tagsYour: 'Your Tags',
-    opt_tagsDesc: 'Create, edit, and delete tags for your documents. Tags are private to your account.',
+    opt_tagsDesc:
+      'Create, edit, and delete tags for your documents. Tags are private to your account.',
     opt_tagsPlaceholder: 'Tag name',
     opt_tagsSave: 'Save Tag',
     opt_tagsCreate: 'Create Tag',
@@ -34,6 +35,8 @@ const translations = {
     login_password: 'Password',
     login_button: 'Login',
     login_signingIn: 'Signing in...',
+    login_or: 'or',
+    login_googleError: 'Unable to sign in with Google. Please try again.',
     login_forgotPassword: 'Forgot password?',
     login_newHere: 'New here?',
     login_newHereDesc: 'Create an account to start managing documents and projects.',
@@ -63,7 +66,7 @@ const translations = {
     hder_dark: 'Dark',
 
     home_home: 'Home',
-    home_topDesc: 'Group your project\'s documents within folders.',
+    home_topDesc: "Group your project's documents within folders.",
     home_newSet: 'New Project',
     home_newFolder: 'Add Folder',
     home_newDoc: 'Add Document',
@@ -74,7 +77,8 @@ const translations = {
     home_tagText: '+ Manage tags',
     home_uploadHeader: 'Upload a Document',
     home_uploadDesc: 'Drag a file into the area below, or choose it from your computer.',
-    home_updateDesc: 'Drag files or a folder into the area below, or choose them from your computer.',
+    home_updateDesc:
+      'Drag files or a folder into the area below, or choose them from your computer.',
     home_uploadDropfile: 'Drop file here',
     home_updateDropfile: 'Drop files or a folder here',
     home_uploadOr: 'or',
@@ -91,7 +95,8 @@ const translations = {
     home_delete: 'Delete',
     home_deleteConfirm: 'Are you sure? This is irreversible.',
     home_loading: 'Loading your document structure...',
-    home_emptySet: 'No projects yet. Create your first project to start organizing folders and documents.',
+    home_emptySet:
+      'No projects yet. Create your first project to start organizing folders and documents.',
     home_emptyFold: 'No folders or documents available in this project.',
     home_emptyFold2: 'No documents available in this folder.',
     home_searchPlaceholder: 'Search documents by name...',
@@ -123,7 +128,6 @@ const translations = {
     home_write: 'Write',
     home_createSharewith: 'Share with email',
     home_createSharewithOrg: 'Share with organization',
-    
 
     tag_notags: 'No tags yet. Add one in Options.',
     tag_loading: 'Loading tags...',
@@ -198,7 +202,8 @@ const translations = {
     opt_languageSaved: 'Idioma cambiado correctamente.',
     opt_manageTags: 'Administrar Etiquetas',
     opt_tagsYour: 'Tus Etiquetas',
-    opt_tagsDesc: 'Crea, cambia y elimina etiquetas para tus documentos. Cada etiqueta es solo asociada a tu cuenta.',
+    opt_tagsDesc:
+      'Crea, cambia y elimina etiquetas para tus documentos. Cada etiqueta es solo asociada a tu cuenta.',
     opt_tagsPlaceholder: 'Nombra tu etiqueta',
     opt_tagsSave: 'Guardar Etiqueta',
     opt_tagsCreate: 'Crear Etiqueta',
@@ -214,6 +219,8 @@ const translations = {
     login_password: 'Contraseña',
     login_button: 'Iniciar sesión',
     login_signingIn: 'Iniciando sesión...',
+    login_or: 'o',
+    login_googleError: 'No se pudo iniciar sesión con Google. Inténtalo de nuevo.',
     login_forgotPassword: '¿Olvidaste tu contraseña?',
     login_newHere: '¿Nuevo aquí?',
     login_newHereDesc: 'Crea una cuenta para empezar a administrar tus documentos y proyectos.',
@@ -271,7 +278,8 @@ const translations = {
     home_delete: 'Eliminar',
     home_deleteConfirm: '¿Estás seguro? Esto no se puede deshacer.',
     home_loading: 'Cargando tus documentos...',
-    home_emptySet: 'Aún no hay proyectos. Crea tu primer proyecto para organizar carpetas y archivos.',
+    home_emptySet:
+      'Aún no hay proyectos. Crea tu primer proyecto para organizar carpetas y archivos.',
     home_emptyFold: 'Sin carpetas o archivos en este proyecto.',
     home_emptyFold2: 'Sin archivos en esta carpeta.',
     home_searchPlaceholder: 'Busca documentos con nombre...',
@@ -331,7 +339,6 @@ const translations = {
     shar_unknown: 'Desconocido',
     shar_loading: 'Cargando documentos compartidos...',
     shar_noDocs: 'No documentos han sido compartidos contigo aún.',
-
 
     org_title: 'Organizaciones',
     org_desc: 'Administrar organizaciones y miembros',
@@ -399,10 +406,7 @@ export const LanguageProvider = ({ children }) => {
 
   const t = (key) => translations[language]?.[key] ?? key
 
-  const value = useMemo(
-    () => ({ language, setLanguage, t, availableLanguages }),
-    [language],
-  )
+  const value = useMemo(() => ({ language, setLanguage, t, availableLanguages }), [language])
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>
 }

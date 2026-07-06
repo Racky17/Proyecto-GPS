@@ -16,6 +16,7 @@ const router = express.Router()
 
 const findOwnedTag = async (tagId, userId) => {
   if (isMongoConnected() && collections.tags) {
+    if (!ObjectId.isValid(tagId)) return null
     return collections.tags.findOne({ _id: new ObjectId(tagId), ownerId: new ObjectId(userId) })
   }
   const tags = await findTagsForUser(userId)

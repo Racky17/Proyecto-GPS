@@ -12,6 +12,7 @@ const insertOrganization = async (org) => {
 
 const findOrganizationById = async (orgId) => {
   if (isMongoConnected() && collections.organizations) {
+    if (!ObjectId.isValid(orgId)) return null
     return collections.organizations.findOne({ _id: new ObjectId(orgId) })
   }
   return fallbackOrganizations.find((o) => String(o._id) === String(orgId))

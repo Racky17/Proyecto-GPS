@@ -39,7 +39,8 @@ const findUserByIdAndUsername = async (id, username) => {
 
 const findUserByCredentials = async (value, password) => {
   const user = await findUserByUsernameOrEmail(value)
-  if (!user) {
+  // Los usuarios creados con Google no tienen contraseña local
+  if (!user || !user.passwordHash) {
     return null
   }
 
@@ -52,8 +53,9 @@ const insertUser = async (user) => {
     return collections.users.insertOne(user)
   }
 
-  fallbackUsers.push(user)
-  return { insertedId: user._id || user.username }
+  const fallbackUser = { ...user, _id: user._id || new ObjectId() }
+  fallbackUsers.push(fallbackUser)
+  return { insertedId: fallbackUser._id }
 }
 
 module.exports = {

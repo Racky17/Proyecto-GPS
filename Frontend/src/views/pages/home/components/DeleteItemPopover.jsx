@@ -2,14 +2,7 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import { CButton, CPopover } from '@coreui/react'
 
-const DeleteItemPopover = ({
-  item,
-  openItemId,
-  setOpenItemId,
-  onDeleteItem,
-  deleteLabel,
-  t,
-}) => {
+const DeleteItemPopover = ({ item, openItemId, setOpenItemId, onDeleteItem, deleteLabel, t }) => {
   const isVisible = openItemId === String(item._id)
 
   const handleDelete = async (event) => {
@@ -24,23 +17,15 @@ const DeleteItemPopover = ({
       placement="bottom"
       visible={isVisible}
       onHide={() => setOpenItemId(null)}
-      content={(
-        <div
-          className="bg-body rounded-3 border-body-secondary"
-          style={{ minWidth: '180px' }}
-        >
+      content={
+        <div className="bg-body rounded-3 border-body-secondary" style={{ minWidth: '180px' }}>
           <div className="d-flex flex-column gap-2 p-3">
-            <CButton
-              color="danger"
-              size="sm"
-              className="rounded-pill"
-              onClick={handleDelete}
-            >
+            <CButton color="danger" size="sm" className="rounded-pill" onClick={handleDelete}>
               {deleteLabel || t('home_delete') || 'Delete'}
             </CButton>
           </div>
         </div>
-      )}
+      }
     >
       <CButton
         size="sm"

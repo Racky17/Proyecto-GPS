@@ -59,23 +59,16 @@ export const exportCryptoKey = async (key) => {
 
 export const importCryptoKey = async (keyBase64) => {
   const raw = fromBase64(keyBase64)
-  return window.crypto.subtle.importKey(
-    'raw',
-    raw,
-    { name: 'AES-GCM' },
-    false,
-    ['encrypt', 'decrypt'],
-  )
+  return window.crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, [
+    'encrypt',
+    'decrypt',
+  ])
 }
 
 export const encryptText = async (key, text) => {
   const iv = window.crypto.getRandomValues(new Uint8Array(12))
   const encoded = textEncoder.encode(text)
-  const cipherBuffer = await window.crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    encoded,
-  )
+  const cipherBuffer = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded)
 
   const combined = new Uint8Array(iv.byteLength + cipherBuffer.byteLength)
   combined.set(iv, 0)

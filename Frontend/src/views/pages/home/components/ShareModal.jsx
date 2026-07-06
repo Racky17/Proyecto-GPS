@@ -34,18 +34,16 @@ const ShareModal = ({
 }) => (
   <CModal visible={visible} size="lg" onClose={onClose} backdrop="static">
     <CModalHeader>
-      <CModalTitle>{t('shome_share')} {t('shome_'+type)}</CModalTitle>
+      <CModalTitle>
+        {t('shome_share')} {t('shome_' + type)}
+      </CModalTitle>
     </CModalHeader>
     <CModalBody>
-      <div className="mb-3 text-body-secondary">
-        {t('shome_desc')}
-      </div>
+      <div className="mb-3 text-body-secondary">{t('shome_desc')}</div>
       {error && <div className="mb-3 text-danger">{error}</div>}
       <div className="mb-3">
         <div className="small text-body-secondary mb-1">{t('shome_owner')}</div>
-        <div className="rounded-3 border border-body-secondary p-3 bg-body">
-          {ownerLabel}
-        </div>
+        <div className="rounded-3 border border-body-secondary p-3 bg-body">{ownerLabel}</div>
       </div>
       <div className="mb-3">
         <div className="small text-body-secondary mb-1">{t('shome_sharedwith')}</div>

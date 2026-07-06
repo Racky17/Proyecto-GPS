@@ -1,3 +1,5 @@
 node_modules/
 .env
-package-lock.json
+
+# Datos locales (dataset data2 extraido del zip)
+data/

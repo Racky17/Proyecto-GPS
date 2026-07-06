@@ -345,7 +345,8 @@ const Home = () => {
     }
     if (currentLocation.type === 'folder' && currentFolder) {
       return documents.filter(
-        (doc) => String(doc.folderId) === String(currentFolder._id) && documentMatchesSelectedTag(doc),
+        (doc) =>
+          String(doc.folderId) === String(currentFolder._id) && documentMatchesSelectedTag(doc),
       )
     }
     return []
@@ -438,12 +439,17 @@ const Home = () => {
       }
     }
 
-    return collectedFiles.length ? collectedFiles : Array.from(dataTransfer.files || []).filter(Boolean)
+    return collectedFiles.length
+      ? collectedFiles
+      : Array.from(dataTransfer.files || []).filter(Boolean)
   }
 
   const handleTogglePin = async (item, itemType = 'document') => {
     if (!authToken || !item || !item._id) return
-    const endpoint = itemType === 'folder' ? `/api/user/folders/${item._id}/pin` : `/api/user/documents/${item._id}/pin`
+    const endpoint =
+      itemType === 'folder'
+        ? `/api/user/folders/${item._id}/pin`
+        : `/api/user/documents/${item._id}/pin`
     try {
       const response = await fetch(`${apiBase}${endpoint}`, {
         method: 'PUT',
@@ -459,9 +465,13 @@ const Home = () => {
         return
       }
       if (itemType === 'folder') {
-        setFolders((prev) => prev.map((folder) => (String(folder._id) === String(item._id) ? result.data : folder)))
+        setFolders((prev) =>
+          prev.map((folder) => (String(folder._id) === String(item._id) ? result.data : folder)),
+        )
       } else {
-        setDocuments((prev) => prev.map((doc) => (String(doc._id) === String(item._id) ? result.data : doc)))
+        setDocuments((prev) =>
+          prev.map((doc) => (String(doc._id) === String(item._id) ? result.data : doc)),
+        )
       }
       setMessage(`${itemType.charAt(0).toUpperCase() + itemType.slice(1)} pin state updated.`)
     } catch (error) {
@@ -502,7 +512,6 @@ const Home = () => {
       setCurrentLocation({ type: 'root', id: null })
       setSelected({ type: null, id: null })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.key, location.pathname, location.search, location.hash, sets])
 
   useEffect(() => {
@@ -1075,11 +1084,21 @@ const Home = () => {
       if (type === 'document' && String(selected.id) === String(item._id)) {
         setSelected({ type: null, id: null })
       }
-      if (type === 'folder' && currentLocation.type === 'folder' && String(currentLocation.id) === String(item._id)) {
-        setCurrentLocation(item.setId ? { type: 'set', id: item.setId } : { type: 'root', id: null })
+      if (
+        type === 'folder' &&
+        currentLocation.type === 'folder' &&
+        String(currentLocation.id) === String(item._id)
+      ) {
+        setCurrentLocation(
+          item.setId ? { type: 'set', id: item.setId } : { type: 'root', id: null },
+        )
         setSelected({ type: null, id: null })
       }
-      if (type === 'set' && currentLocation.type === 'set' && String(currentLocation.id) === String(item._id)) {
+      if (
+        type === 'set' &&
+        currentLocation.type === 'set' &&
+        String(currentLocation.id) === String(item._id)
+      ) {
         setCurrentLocation({ type: 'root', id: null })
         setSelected({ type: null, id: null })
       }
@@ -1382,7 +1401,9 @@ const Home = () => {
     return folders.find(
       (folder) =>
         String(folder.setId) === String(currentLocationInfo.setId) &&
-        String(folder.title || '').trim().toLowerCase() === normalizedTitle,
+        String(folder.title || '')
+          .trim()
+          .toLowerCase() === normalizedTitle,
     )
   }
 
@@ -1447,7 +1468,8 @@ const Home = () => {
       for (const file of selectedUploadFiles) {
         const relativePath = String(file.webkitRelativePath || file.name || '')
         const relativeParts = relativePath.split('/').filter(Boolean)
-        const fileName = relativeParts.length > 0 ? relativeParts[relativeParts.length - 1] : file.name
+        const fileName =
+          relativeParts.length > 0 ? relativeParts[relativeParts.length - 1] : file.name
         let targetFolderId = currentLocationInfo.folderId || null
 
         if (currentLocation.type === 'set' && relativeParts.length > 1) {
@@ -1457,7 +1479,9 @@ const Home = () => {
         }
 
         if (currentLocation.type === 'folder' && currentFolder && relativeParts.length > 1) {
-          const currentFolderName = String(currentFolder.title || '').trim().toLowerCase()
+          const currentFolderName = String(currentFolder.title || '')
+            .trim()
+            .toLowerCase()
           if (relativeParts[0].trim().toLowerCase() === currentFolderName) {
             targetFolderId = currentFolder._id
           }
@@ -1793,7 +1817,9 @@ const Home = () => {
         >
           <CModalHeader>
             <CModalTitle>
-              {createItemType === 'folder' ? t('home_create') + t('home_folder') : t('home_create') + t('home_set')}
+              {createItemType === 'folder'
+                ? t('home_create') + t('home_folder')
+                : t('home_create') + t('home_set')}
             </CModalTitle>
           </CModalHeader>
           <CModalBody>
@@ -1805,7 +1831,11 @@ const Home = () => {
             {createModalError && <div className="mb-3 text-danger">{createModalError}</div>}
             <CFormInput
               className="mb-3"
-              placeholder={createItemType === 'folder' ? t('home_createName') + t('home_folder') : t('home_createName') + t('home_set')}
+              placeholder={
+                createItemType === 'folder'
+                  ? t('home_createName') + t('home_folder')
+                  : t('home_createName') + t('home_set')
+              }
               value={createItemTitle}
               onChange={(e) => setCreateItemTitle(e.target.value)}
             />
@@ -1847,7 +1877,9 @@ const Home = () => {
               {t('home_cancel')}
             </CButton>
             <CButton color="primary" onClick={handleCreateShareSubmit}>
-              {createItemType === 'folder' ? t('home_createButton') + t('home_folder') : t('home_createButton') + t('home_set')}
+              {createItemType === 'folder'
+                ? t('home_createButton') + t('home_folder')
+                : t('home_createButton') + t('home_set')}
             </CButton>
           </CModalFooter>
         </CModal>
@@ -1935,8 +1967,7 @@ const Home = () => {
                       <CRow className="g-3">
                         {sortByPinned(getTaggedDocumentsForCurrentScope()).map((doc) => {
                           const isSelected =
-                            selected.type === 'document' &&
-                            String(selected.id) === String(doc._id)
+                            selected.type === 'document' && String(selected.id) === String(doc._id)
                           return (
                             <CCol xs={12} sm={6} lg={4} key={doc._id}>
                               <div
@@ -2008,8 +2039,7 @@ const Home = () => {
                       <CRow className="g-3">
                         {sortByPinned(getTaggedDocumentsForCurrentScope()).map((doc) => {
                           const isSelected =
-                            selected.type === 'document' &&
-                            String(selected.id) === String(doc._id)
+                            selected.type === 'document' && String(selected.id) === String(doc._id)
                           return (
                             <CCol xs={12} sm={6} lg={4} key={doc._id}>
                               <div
@@ -2136,10 +2166,11 @@ const Home = () => {
                             </CCol>
                           )
                         })}
-                        {sortByPinned((docsBySet[String(currentSet._id)] || []).filter((doc) => !doc.folderId)).map((doc) => {
+                        {sortByPinned(
+                          (docsBySet[String(currentSet._id)] || []).filter((doc) => !doc.folderId),
+                        ).map((doc) => {
                           const isSelected =
-                            selected.type === 'document' &&
-                            String(selected.id) === String(doc._id)
+                            selected.type === 'document' && String(selected.id) === String(doc._id)
                           return (
                             <CCol xs={12} sm={6} lg={4} key={doc._id}>
                               <div
@@ -2157,47 +2188,47 @@ const Home = () => {
                                   <div>
                                     <div className="fw-semibold">{doc.title}</div>
                                     {renderTagMarkers(doc)}
-                                    </div>
-                                  </div>
-                                  <div className="mt-auto">
-                                    <ItemActions
-                                      type="document"
-                                      item={doc}
-                                      onShare={openShareModal}
-                                      onMoreActions={moreActions}
-                                      shareLabel={t('home_shareButton')}
-                                      moreActionsPopover={
-                                        <DocumentActionPopover
-                                          doc={doc}
-                                          openMoreActionsDocId={openMoreActionsDocId}
-                                          setOpenMoreActionsDocId={setOpenMoreActionsDocId}
-                                          onOpenUpdateDocument={handleOpenDocumentUpdateModal}
-                                          onOpenRevisionHistory={handleOpenRevisionHistoryModal}
-                                          onDeleteDocument={handleDeleteDocument}
-                                          t={t}
-                                        />
-                                      }
-                                      tagPopover={
-                                        <DocumentTagPopover
-                                          item={doc}
-                                          itemType="document"
-                                          openTagPopoverDocId={openTagPopoverDocId}
-                                          setOpenTagPopoverDocId={setOpenTagPopoverDocId}
-                                          tags={tags}
-                                          loadingTags={loadingTags}
-                                          onToggleTag={handleToggleDocumentTag}
-                                          onTogglePin={handleTogglePin}
-                                          activeTagIds={documentUserTags[doc._id]}
-                                          pinned={Boolean(doc.pinnedAt)}
-                                          t={t}
-                                        />
-                                      }
-                                    />
                                   </div>
                                 </div>
-                              </CCol>
-                            )
-                          })}
+                                <div className="mt-auto">
+                                  <ItemActions
+                                    type="document"
+                                    item={doc}
+                                    onShare={openShareModal}
+                                    onMoreActions={moreActions}
+                                    shareLabel={t('home_shareButton')}
+                                    moreActionsPopover={
+                                      <DocumentActionPopover
+                                        doc={doc}
+                                        openMoreActionsDocId={openMoreActionsDocId}
+                                        setOpenMoreActionsDocId={setOpenMoreActionsDocId}
+                                        onOpenUpdateDocument={handleOpenDocumentUpdateModal}
+                                        onOpenRevisionHistory={handleOpenRevisionHistoryModal}
+                                        onDeleteDocument={handleDeleteDocument}
+                                        t={t}
+                                      />
+                                    }
+                                    tagPopover={
+                                      <DocumentTagPopover
+                                        item={doc}
+                                        itemType="document"
+                                        openTagPopoverDocId={openTagPopoverDocId}
+                                        setOpenTagPopoverDocId={setOpenTagPopoverDocId}
+                                        tags={tags}
+                                        loadingTags={loadingTags}
+                                        onToggleTag={handleToggleDocumentTag}
+                                        onTogglePin={handleTogglePin}
+                                        activeTagIds={documentUserTags[doc._id]}
+                                        pinned={Boolean(doc.pinnedAt)}
+                                        t={t}
+                                      />
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            </CCol>
+                          )
+                        })}
                       </CRow>
                     ) : (
                       <div className="text-body-secondary">{t('home_emptyFold')}</div>
@@ -2207,9 +2238,15 @@ const Home = () => {
 
                 {currentLocation.type === 'folder' && currentFolder && (
                   <>
-                    {(docsByFolder[String(currentFolder._id)] || []).filter(documentMatchesSelectedTag).length > 0 ? (
+                    {(docsByFolder[String(currentFolder._id)] || []).filter(
+                      documentMatchesSelectedTag,
+                    ).length > 0 ? (
                       <CRow className="g-3">
-                        {sortByPinned((docsByFolder[String(currentFolder._id)] || []).filter(documentMatchesSelectedTag)).map((doc) => {
+                        {sortByPinned(
+                          (docsByFolder[String(currentFolder._id)] || []).filter(
+                            documentMatchesSelectedTag,
+                          ),
+                        ).map((doc) => {
                           const isSelected =
                             selected.type === 'document' && String(selected.id) === String(doc._id)
                           return (

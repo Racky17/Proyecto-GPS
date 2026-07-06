@@ -232,9 +232,7 @@ const Options = () => {
                 <p className="mb-1">{t('opt_signeduser')}</p>
                 <strong>{currentUser?.email || t('opt_unknownuser')}</strong>
               </div>
-              <p className="text-muted mb-4">
-                {t('opt_optionsdesc')}
-              </p>
+              <p className="text-muted mb-4">{t('opt_optionsdesc')}</p>
               <div className="d-flex flex-wrap gap-2">
                 <CButton color="danger" onClick={handleLogout}>
                   {t('opt_logout')}
@@ -248,11 +246,7 @@ const Options = () => {
               <p className="text-muted mb-3">{t('opt_selectLanguage')}</p>
               <div className="mb-3">
                 <label className="form-label">{t('opt_currentLanguage')}</label>
-                <select
-                  className="form-select"
-                  value={language}
-                  onChange={handleLanguageChange}
-                >
+                <select className="form-select" value={language} onChange={handleLanguageChange}>
                   <option value="en">{t('opt_english')}</option>
                   <option value="es">{t('opt_spanish')}</option>
                 </select>
@@ -265,9 +259,7 @@ const Options = () => {
           <CCard>
             <CCardHeader>{t('opt_manageTags')}</CCardHeader>
             <CCardBody>
-              <p className="text-muted mb-4">
-                {t('opt_tagsDesc')}
-              </p>
+              <p className="text-muted mb-4">{t('opt_tagsDesc')}</p>
               {error && <div className="mb-3 text-danger">{error}</div>}
               {message && <div className="mb-3 text-success">{message}</div>}
               <CForm onSubmit={editingTagId ? handleUpdateTag : handleAddTag}>
@@ -277,14 +269,18 @@ const Options = () => {
                       placeholder={t('opt_tagsPlaceholder')}
                       value={editingTagId ? editingTagName : newTagName}
                       onChange={(e) =>
-                        editingTagId ? setEditingTagName(e.target.value) : setNewTagName(e.target.value)
+                        editingTagId
+                          ? setEditingTagName(e.target.value)
+                          : setNewTagName(e.target.value)
                       }
                     />
                     <input
                       type="color"
                       value={editingTagId ? editingTagColor : newTagColor}
                       onChange={(e) =>
-                        editingTagId ? setEditingTagColor(e.target.value) : setNewTagColor(e.target.value)
+                        editingTagId
+                          ? setEditingTagColor(e.target.value)
+                          : setNewTagColor(e.target.value)
                       }
                       style={{ width: '3rem', height: '2.5rem', border: 'none', padding: 0 }}
                     />

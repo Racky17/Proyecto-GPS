@@ -29,12 +29,7 @@ const AppHeader = () => {
       >
         <CIcon icon={cilMenu} />
       </CButton>
-      <CButton
-        color="secondary"
-        size="sm"
-        className="rounded-pill"
-        onClick={handleToggleTheme}
-      >
+      <CButton color="secondary" size="sm" className="rounded-pill" onClick={handleToggleTheme}>
         <CIcon icon={isDarkMode ? cilSun : cilMoon} className="me-2" />
         {isDarkMode ? t('hder_light') : t('hder_dark')}
       </CButton>

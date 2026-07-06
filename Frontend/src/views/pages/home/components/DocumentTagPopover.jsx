@@ -35,7 +35,10 @@ const DocumentTagPopover = ({
       visible={isVisible}
       onHide={() => setOpenTagPopoverDocId(null)}
       content={
-        <div className="document-tag-popover bg-body rounded-3 border-body-secondary" style={{ minWidth: '240px' }}>
+        <div
+          className="document-tag-popover bg-body rounded-3 border-body-secondary"
+          style={{ minWidth: '240px' }}
+        >
           <div className="mb-3">
             <CLink href="/#/options" className="text-decoration-none">
               {t('tag_manage')}
@@ -107,9 +110,7 @@ const DocumentTagPopover = ({
                 </div>
               )
             ) : (
-              <div className="text-body-secondary small">
-                {t('tag_pinhelp')}
-              </div>
+              <div className="text-body-secondary small">{t('tag_pinhelp')}</div>
             )}
           </div>
         </div>

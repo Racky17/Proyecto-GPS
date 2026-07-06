@@ -47,8 +47,14 @@ const Organizations = () => {
   const canManageOrg = (org) => {
     if (!org || !currentUserId) return false
     if (String(org.ownerId) === currentUserId) return true
-    return Array.isArray(org.members) && org.members.some(
-      (member) => member.type === 'user' && String(member.id) === currentUserId && member.role === 'administrator',
+    return (
+      Array.isArray(org.members) &&
+      org.members.some(
+        (member) =>
+          member.type === 'user' &&
+          String(member.id) === currentUserId &&
+          member.role === 'administrator',
+      )
     )
   }
 
@@ -149,9 +155,12 @@ const Organizations = () => {
       const summaryFetch = fetch(`${apiBase}/api/user/analytics/organizations/${orgId}/summary`, {
         headers: { Authorization: `Bearer ${authToken}` },
       })
-      const trendFetch = fetch(`${apiBase}/api/user/analytics/organizations/${orgId}/documents/trend?interval=weekly`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      })
+      const trendFetch = fetch(
+        `${apiBase}/api/user/analytics/organizations/${orgId}/documents/trend?interval=weekly`,
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+        },
+      )
 
       setLoadingAnalytics((prev) => ({ ...prev, [orgId]: true }))
       const [orgResponse, summaryResponse, trendResponse] = await Promise.all([
@@ -265,186 +274,265 @@ const Organizations = () => {
 
   return (
     <CContainer>
-    <CRow className="justify-content-center">
+      <CRow className="justify-content-center">
         <CCol md={16} lg={20}>
-        <CCard>
+          <CCard>
             <CCardHeader>{t('org_title')}</CCardHeader>
             <CCardBody>
-            <p className="text-muted mb-4">{t('org_desc')}</p>
-            {error && <div className="mb-3 text-danger">{error}</div>}
-            {message && <div className="mb-3 text-success">{message}</div>}
+              <p className="text-muted mb-4">{t('org_desc')}</p>
+              {error && <div className="mb-3 text-danger">{error}</div>}
+              {message && <div className="mb-3 text-success">{message}</div>}
 
-            <CForm onSubmit={handleAddOrg}>
+              <CForm onSubmit={handleAddOrg}>
                 <div className="d-flex flex-wrap gap-2 mb-4">
-                <CFormInput
+                  <CFormInput
                     placeholder={t('org_new')}
                     value={newOrgName}
                     onChange={(e) => setNewOrgName(e.target.value)}
-                />
-                <CButton color="primary" type="submit">{t('org_create')}</CButton>
+                  />
+                  <CButton color="primary" type="submit">
+                    {t('org_create')}
+                  </CButton>
                 </div>
-            </CForm>
+              </CForm>
 
-            <div>
+              <div>
                 <h5 className="mb-3">{t('org_yourOrgs')}</h5>
                 {loadingOrgs ? (
-                <p className="text-body-secondary">{t('org_loadingOrgs')}</p>
+                  <p className="text-body-secondary">{t('org_loadingOrgs')}</p>
                 ) : orgs.length === 0 ? (
-                <p className="text-muted">{t('org_noOrgs')}</p>
+                  <p className="text-muted">{t('org_noOrgs')}</p>
                 ) : (
-                <ul className="list-unstyled mb-0">
+                  <ul className="list-unstyled mb-0">
                     {orgs.map((org) => (
-                    <li
+                      <li
                         key={String(org._id)}
                         className="d-flex flex-column rounded-3 bg-body border border-body-secondary p-3 mb-2"
-                    >
+                      >
                         <div className="d-flex flex-column flex-sm-row align-items-start align-items-sm-center justify-content-between mb-2">
-                        <div>
+                          <div>
                             <strong>{org.name}</strong>
-                            <div className="text-body-secondary small">{t('org_owner')} {String(org.ownerId)}</div>
-                        </div>
-                        <div className="d-flex gap-2 mt-2 mt-sm-0">
-                            <CButton size="sm" color="secondary" onClick={() => toggleExpand(org._id)}>
-                            {expandedOrgId === org._id ? t('org_hide') : t('org_manage')}
-                            </CButton>
-                        </div>
-                        </div>
-
-                        {expandedOrgId === org._id && (
-                        <div className="mt-2">
-                          {loadingAnalytics[org._id] ? (
-                            <p className="text-body-secondary">{t('org_loadinganalytics')}</p>
-                          ) : orgAnalytics[org._id]?.summary ? (
-                            <div className="mb-4">
-                              <div className="d-flex flex-wrap gap-3 mb-3">
-                                <div className="p-3 border rounded bg-body-tertiary text-center" style={{ minWidth: '10rem' }}>
-                                  <div className="text-uppercase text-muted small mb-1">{t('org_kpidocs')}</div>
-                                  <div className="fs-4">{orgAnalytics[org._id].summary.totalDocuments}</div>
-                                </div>
-                                <div className="p-3 border rounded bg-body-tertiary text-center" style={{ minWidth: '10rem' }}>
-                                  <div className="text-uppercase text-muted small mb-1">{t('org_kpipinned')}</div>
-                                  <div className="fs-4">{orgAnalytics[org._id].summary.pinnedDocuments}</div>
-                                </div>
-                                <div className="p-3 border rounded bg-body-tertiary text-center" style={{ minWidth: '10rem' }}>
-                                  <div className="text-uppercase text-muted small mb-1">{t('org_kpishared')}</div>
-                                  <div className="fs-4">{orgAnalytics[org._id].summary.sharedDocuments}</div>
-                                </div>
-                                <div className="p-3 border rounded bg-body-tertiary text-center" style={{ minWidth: '10rem' }}>
-                                  <div className="text-uppercase text-muted small mb-1">{t('org_kpisets')}</div>
-                                  <div className="fs-4">{orgAnalytics[org._id].summary.uniqueSets}</div>
-                                </div>
-                                <div className="p-3 border rounded bg-body-tertiary text-center" style={{ minWidth: '10rem' }}>
-                                  <div className="text-uppercase text-muted small mb-1">{t('org_kpifolders')}</div>
-                                  <div className="fs-4">{orgAnalytics[org._id].summary.uniqueFolders}</div>
-                                </div>
-                              </div>
-                              <div className="border rounded bg-body p-3">
-                                <h6 className="mb-3">{t('org_kpitrendtitle')}</h6>
-                                <CChart
-                                  type="line"
-                                  data={{
-                                    labels: Object.keys(orgAnalytics[org._id].trend.trend || {}),
-                                    datasets: [
-                                      {
-                                        label: 'Created',
-                                        backgroundColor: 'rgba(13,110,253,0.2)',
-                                        borderColor: 'rgba(13,110,253,1)',
-                                        pointBackgroundColor: 'rgba(13,110,253,1)',
-                                        data: Object.values(orgAnalytics[org._id].trend.trend || {}),
-                                        fill: true,
-                                        tension: 0.3,
-                                      },
-                                    ],
-                                  }}
-                                  options={{
-                                    maintainAspectRatio: false,
-                                    plugins: {
-                                      legend: { display: false },
-                                    },
-                                    scales: {
-                                      x: {
-                                        grid: { display: false },
-                                      },
-                                      y: {
-                                        beginAtZero: true,
-                                      },
-                                    },
-                                  }}
-                                  style={{ height: '240px' }}
-                                />
-                              </div>
+                            <div className="text-body-secondary small">
+                              {t('org_owner')} {String(org.ownerId)}
                             </div>
-                          ) : (
-                            <p className="text-body-secondary">{t('org_noanalytics')}</p>
-                          )}
-
-                          <h6 className="mb-2">{t('org_members')}</h6>
-                          <ul className="list-unstyled mb-3">
-                            {(orgMembers[org._id] || []).map((m, idx) => (
-                              <li key={idx} className="bg-body-tertiary d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-2">
-                                <div>
-                                  {m.type === 'user' ? (
-                                    <>
-                                      <strong>{m.user?.username || m.user?.email || m.user?.name || m.user?.id}</strong>
-                                      <div className="text-body-secondary small">{m.user?.email || ''}</div>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <strong>{m.organization?.name || m.organization?.id}</strong>
-                                      <div className="text-body-secondary small">Organization</div>
-                                    </>
-                                  )}
-                                </div>
-                                <div className="d-flex align-items-center gap-2 mt-2 mt-sm-0">
-                                  <div className="text-muted small">{m.role}</div>
-                                  {m.type === 'user' && canManageOrg(org) && String(m.user?._id || m.user?.id || '') !== String(org.ownerId) && (
-                                    <CButton
-                                      size="sm"
-                                      color="danger"
-                                      disabled={Boolean(removingMember[m.user?._id || m.user?.id])}
-                                      onClick={() => handleRemoveMember(org._id, m.user?._id || m.user?.id)}
-                                    >
-                                      {removingMember[m.user?._id || m.user?.id] ? t('org_removing') : t('org_remove')}
-                                    </CButton>
-                                  )}
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-
-                          <div className="d-flex flex-wrap gap-2 align-items-center">
-                            <CFormInput
-                              className="flex-grow-1"
-                              placeholder={t('org_membEmail')}
-                              value={(memberForms[org._id] || {}).email || ''}
-                              onChange={(e) => handleMemberInputChange(org._id, 'email', e.target.value)}
-                            />
-                            <select
-                              value={(memberForms[org._id] || {}).role || ''}
-                              onChange={(e) => handleMemberInputChange(org._id, 'role', e.target.value)}
-                              className="form-select"
-                              style={{ minWidth: '10rem' }}
+                          </div>
+                          <div className="d-flex gap-2 mt-2 mt-sm-0">
+                            <CButton
+                              size="sm"
+                              color="secondary"
+                              onClick={() => toggleExpand(org._id)}
                             >
-                              <option value="">{t('org_selRole')}</option>
-                              {ROLE_OPTIONS.map((r) => (
-                                <option key={r.value} value={r.value}>{r.label}</option>
-                              ))}
-                            </select>
-                            <CButton size="sm" color="primary" onClick={() => handleAddMember(org._id)} disabled={addingMember}>
-                              {t('org_add')}
+                              {expandedOrgId === org._id ? t('org_hide') : t('org_manage')}
                             </CButton>
                           </div>
                         </div>
+
+                        {expandedOrgId === org._id && (
+                          <div className="mt-2">
+                            {loadingAnalytics[org._id] ? (
+                              <p className="text-body-secondary">{t('org_loadinganalytics')}</p>
+                            ) : orgAnalytics[org._id]?.summary ? (
+                              <div className="mb-4">
+                                <div className="d-flex flex-wrap gap-3 mb-3">
+                                  <div
+                                    className="p-3 border rounded bg-body-tertiary text-center"
+                                    style={{ minWidth: '10rem' }}
+                                  >
+                                    <div className="text-uppercase text-muted small mb-1">
+                                      {t('org_kpidocs')}
+                                    </div>
+                                    <div className="fs-4">
+                                      {orgAnalytics[org._id].summary.totalDocuments}
+                                    </div>
+                                  </div>
+                                  <div
+                                    className="p-3 border rounded bg-body-tertiary text-center"
+                                    style={{ minWidth: '10rem' }}
+                                  >
+                                    <div className="text-uppercase text-muted small mb-1">
+                                      {t('org_kpipinned')}
+                                    </div>
+                                    <div className="fs-4">
+                                      {orgAnalytics[org._id].summary.pinnedDocuments}
+                                    </div>
+                                  </div>
+                                  <div
+                                    className="p-3 border rounded bg-body-tertiary text-center"
+                                    style={{ minWidth: '10rem' }}
+                                  >
+                                    <div className="text-uppercase text-muted small mb-1">
+                                      {t('org_kpishared')}
+                                    </div>
+                                    <div className="fs-4">
+                                      {orgAnalytics[org._id].summary.sharedDocuments}
+                                    </div>
+                                  </div>
+                                  <div
+                                    className="p-3 border rounded bg-body-tertiary text-center"
+                                    style={{ minWidth: '10rem' }}
+                                  >
+                                    <div className="text-uppercase text-muted small mb-1">
+                                      {t('org_kpisets')}
+                                    </div>
+                                    <div className="fs-4">
+                                      {orgAnalytics[org._id].summary.uniqueSets}
+                                    </div>
+                                  </div>
+                                  <div
+                                    className="p-3 border rounded bg-body-tertiary text-center"
+                                    style={{ minWidth: '10rem' }}
+                                  >
+                                    <div className="text-uppercase text-muted small mb-1">
+                                      {t('org_kpifolders')}
+                                    </div>
+                                    <div className="fs-4">
+                                      {orgAnalytics[org._id].summary.uniqueFolders}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="border rounded bg-body p-3">
+                                  <h6 className="mb-3">{t('org_kpitrendtitle')}</h6>
+                                  <CChart
+                                    type="line"
+                                    data={{
+                                      labels: Object.keys(orgAnalytics[org._id].trend.trend || {}),
+                                      datasets: [
+                                        {
+                                          label: 'Created',
+                                          backgroundColor: 'rgba(13,110,253,0.2)',
+                                          borderColor: 'rgba(13,110,253,1)',
+                                          pointBackgroundColor: 'rgba(13,110,253,1)',
+                                          data: Object.values(
+                                            orgAnalytics[org._id].trend.trend || {},
+                                          ),
+                                          fill: true,
+                                          tension: 0.3,
+                                        },
+                                      ],
+                                    }}
+                                    options={{
+                                      maintainAspectRatio: false,
+                                      plugins: {
+                                        legend: { display: false },
+                                      },
+                                      scales: {
+                                        x: {
+                                          grid: { display: false },
+                                        },
+                                        y: {
+                                          beginAtZero: true,
+                                        },
+                                      },
+                                    }}
+                                    style={{ height: '240px' }}
+                                  />
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-body-secondary">{t('org_noanalytics')}</p>
+                            )}
+
+                            <h6 className="mb-2">{t('org_members')}</h6>
+                            <ul className="list-unstyled mb-3">
+                              {(orgMembers[org._id] || []).map((m, idx) => (
+                                <li
+                                  key={idx}
+                                  className="bg-body-tertiary d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-2"
+                                >
+                                  <div>
+                                    {m.type === 'user' ? (
+                                      <>
+                                        <strong>
+                                          {m.user?.username ||
+                                            m.user?.email ||
+                                            m.user?.name ||
+                                            m.user?.id}
+                                        </strong>
+                                        <div className="text-body-secondary small">
+                                          {m.user?.email || ''}
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <strong>
+                                          {m.organization?.name || m.organization?.id}
+                                        </strong>
+                                        <div className="text-body-secondary small">
+                                          Organization
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                  <div className="d-flex align-items-center gap-2 mt-2 mt-sm-0">
+                                    <div className="text-muted small">{m.role}</div>
+                                    {m.type === 'user' &&
+                                      canManageOrg(org) &&
+                                      String(m.user?._id || m.user?.id || '') !==
+                                        String(org.ownerId) && (
+                                        <CButton
+                                          size="sm"
+                                          color="danger"
+                                          disabled={Boolean(
+                                            removingMember[m.user?._id || m.user?.id],
+                                          )}
+                                          onClick={() =>
+                                            handleRemoveMember(org._id, m.user?._id || m.user?.id)
+                                          }
+                                        >
+                                          {removingMember[m.user?._id || m.user?.id]
+                                            ? t('org_removing')
+                                            : t('org_remove')}
+                                        </CButton>
+                                      )}
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+
+                            <div className="d-flex flex-wrap gap-2 align-items-center">
+                              <CFormInput
+                                className="flex-grow-1"
+                                placeholder={t('org_membEmail')}
+                                value={(memberForms[org._id] || {}).email || ''}
+                                onChange={(e) =>
+                                  handleMemberInputChange(org._id, 'email', e.target.value)
+                                }
+                              />
+                              <select
+                                value={(memberForms[org._id] || {}).role || ''}
+                                onChange={(e) =>
+                                  handleMemberInputChange(org._id, 'role', e.target.value)
+                                }
+                                className="form-select"
+                                style={{ minWidth: '10rem' }}
+                              >
+                                <option value="">{t('org_selRole')}</option>
+                                {ROLE_OPTIONS.map((r) => (
+                                  <option key={r.value} value={r.value}>
+                                    {r.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <CButton
+                                size="sm"
+                                color="primary"
+                                onClick={() => handleAddMember(org._id)}
+                                disabled={addingMember}
+                              >
+                                {t('org_add')}
+                              </CButton>
+                            </div>
+                          </div>
                         )}
-                    </li>
+                      </li>
                     ))}
-                </ul>
+                  </ul>
                 )}
-            </div>
+              </div>
             </CCardBody>
-        </CCard>
+          </CCard>
         </CCol>
-    </CRow>
+      </CRow>
     </CContainer>
   )
 }

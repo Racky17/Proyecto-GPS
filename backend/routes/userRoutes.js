@@ -46,6 +46,9 @@ const router = express.Router()
 
 const validShareRoles = ['admin', 'write', 'read-only']
 
+// Content-Disposition header values must not contain quotes or CR/LF characters
+const sanitizeFilename = (filename) => String(filename).replace(/["\\\r\n]/g, '_')
+
 const isVerifiedUser = (user) => user && user.verified !== false
 
 const resolveShareTarget = async ({ targetEmail, targetUserId, targetOrgId }) => {
@@ -337,7 +340,7 @@ router.get('/api/user/documents/:id/download', authenticate, async (req, res) =>
 
     const filename = document.file.originalName || document.title || 'document'
     res.setHeader('Content-Type', document.file.contentType || 'application/octet-stream')
-    res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/"/g, '\"')}"`)
+    res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(filename)}"`)
     res.send(fileData)
   } catch (error) {
     res.status(500).json({ message: 'Unable to download document.' })
@@ -454,7 +457,7 @@ router.get('/api/user/documents/:id/revisions/:versionId/download', authenticate
 
     const filename = version.file.originalName || version.title || 'document'
     res.setHeader('Content-Type', version.file.contentType || 'application/octet-stream')
-    res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/"/g, '\"')}"`)
+    res.setHeader('Content-Disposition', `attachment; filename="${sanitizeFilename(filename)}"`)
     res.send(fileData)
   } catch (error) {
     res.status(500).json({ message: 'Unable to download document version.' })
@@ -1018,11 +1021,12 @@ router.delete('/api/user/sets/:id/share', authenticate, async (req, res) => {
 
 router.get('/api/user/account/:id', authenticate, async (req, res) => {
   const userId = req.params.id
-  console.log(`Fetching account info for user ID: ${userId}`)
   try {
     const user = await findUserById(userId)
-    console.log(`Found user: ${user.username}`)
-    res.json({ username: user?.username || [] , email: user?.email || [] })
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' })
+    }
+    res.json({ username: user.username || null, email: user.email || null })
   } catch (error) {
     res.status(500).json({ message: 'Unable to get user.' })
   }

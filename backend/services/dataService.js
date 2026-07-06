@@ -144,6 +144,7 @@ const findAccessibleSetsForUser = async (userId) => {
 
 const findDocumentById = async (documentId) => {
   if (isMongoConnected() && collections.documents) {
+    if (!ObjectId.isValid(documentId)) return null
     return collections.documents.findOne({ _id: new ObjectId(documentId) })
   }
 
@@ -152,6 +153,7 @@ const findDocumentById = async (documentId) => {
 
 const findDocumentForUser = async (documentId, userId) => {
   if (isMongoConnected() && collections.documents) {
+    if (!ObjectId.isValid(documentId)) return null
     return collections.documents.findOne({
       _id: new ObjectId(documentId),
       deletedAt: { $exists: false },
@@ -179,6 +181,7 @@ const findDocumentForUser = async (documentId, userId) => {
 
 const findFolderById = async (folderId) => {
   if (isMongoConnected() && collections.folders) {
+    if (!ObjectId.isValid(folderId)) return null
     return collections.folders.findOne({ _id: new ObjectId(folderId) })
   }
 
@@ -187,6 +190,7 @@ const findFolderById = async (folderId) => {
 
 const findSetById = async (setId) => {
   if (isMongoConnected() && collections.sets) {
+    if (!ObjectId.isValid(setId)) return null
     return collections.sets.findOne({ _id: new ObjectId(setId) })
   }
 
@@ -417,6 +421,7 @@ const deleteTag = async (tagId) => {
 
 const findUserDocumentTags = async (userId, documentId) => {
   if (isMongoConnected() && collections.userDocumentTags) {
+    if (!ObjectId.isValid(documentId)) return null
     return collections.userDocumentTags.findOne({
       userId: new ObjectId(userId),
       documentId: new ObjectId(documentId),

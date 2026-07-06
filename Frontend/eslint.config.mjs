@@ -33,6 +33,9 @@ export default [
     },
     rules: {
       ...eslintPluginReactHooks.configs.recommended.rules,
+      // Patrón fetch-en-useEffect usado en todo el proyecto; se mantiene
+      // como advertencia hasta refactorizar los efectos.
+      'react-hooks/set-state-in-effect': 'warn',
     },
   },
   eslintPluginPrettierRecommended,

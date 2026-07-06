@@ -84,7 +84,8 @@ const connectMongo = async () => {
     }
 
     connected = true
-    console.log('Connected to MongoDB at', MONGODB_URI)
+    // No registrar la URI completa: puede contener credenciales
+    console.log(`Connected to MongoDB (db: ${MONGODB_DB})`)
   } catch (error) {
     connected = false
     console.warn(
