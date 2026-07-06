@@ -1,218 +1,241 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   CButton,
   CCard,
   CCardBody,
+  CCardHeader,
   CCol,
+  CContainer,
   CFormInput,
-  CInputGroup,
-  CInputGroupText,
   CRow,
-  CSpinner,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilArrowLeft, cilFile, cilSearch } from '@coreui/icons'
+import { cilFile } from '@coreui/icons'
 import { useLanguage } from '../../../i18n'
+
 import ItemActions from '../home/components/ItemActions'
 import DocumentTagPopover from '../home/components/DocumentTagPopover'
 import DocumentActionPopover from '../home/components/DocumentActionPopover'
+import ShareModal from '../home/components/ShareModal'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || ''
 
 const Shared = () => {
-  const navigate = useNavigate()
+  const { t } = useLanguage()
   const [documents, setDocuments] = useState([])
   const [tags, setTags] = useState([])
   const [documentUserTags, setDocumentUserTags] = useState({})
-  const [loadingTags, setLoadingTags] = useState(false)
-  const [openTagPopoverDocId, setOpenTagPopoverDocId] = useState(null)
-  const [selected, setSelected] = useState({ type: null, id: null })
-  const [message, setMessage] = useState('')
+  const [ownerMap, setOwnerMap] = useState({})
+  const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(false)
-  const [ownerNames, setOwnerNames] = useState({})
-  const { t } = useLanguage()
+  const [loadingTags, setLoadingTags] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [openTagPopoverDocId, setOpenTagPopoverDocId] = useState(null)
+  const [openMoreActionsDocId, setOpenMoreActionsDocId] = useState(null)
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [shareModalItem, setShareModalItem] = useState(null)
+  const [shareModalEmail, setShareModalEmail] = useState('')
+  const [shareModalOrgId, setShareModalOrgId] = useState('')
+  const [shareModalRole, setShareModalRole] = useState('read-only')
+  const [shareModalError, setShareModalError] = useState('')
+  const [organizations, setOrganizations] = useState([])
+  const [loadingOrgs, setLoadingOrgs] = useState(false)
+  const [selectedDocId, setSelectedDocId] = useState(null)
 
   const authToken = localStorage.getItem('authToken')
-  const authUser = JSON.parse(localStorage.getItem('authUser') || 'null')
-  const userIdFromStorage = authUser
-    ? String(authUser.id ?? authUser._id ?? authUser.userId ?? authUser.uid ?? '')
-    : null
-
-  const getOwnerId = (item) => String(item.ownerId || item.userId)
-
-  const normalizeSharedWithEntries = (sharedWith) => {
-    if (!Array.isArray(sharedWith)) return []
-    return sharedWith
-      .map((entry) => {
-        if (!entry) return null
-        if (typeof entry === 'string' || typeof entry === 'number') {
-          return { type: 'user', userId: String(entry) }
-        }
-        if (entry.userId) {
-          return {
-            type: 'user',
-            userId: String(entry.userId),
-            role: entry.role,
-            email: entry.email || null,
-            name: entry.name || null,
-          }
-        }
-        if (entry.orgId) {
-          return {
-            type: 'org',
-            orgId: String(entry.orgId),
-            role: entry.role,
-            name: entry.name || null,
-          }
-        }
-        return null
-      })
-      .filter(Boolean)
-  }
-
-  const sharedDocuments = useMemo(() => {
-    if (!userIdFromStorage) return []
-    return documents.filter((doc) => getOwnerId(doc) !== userIdFromStorage)
-  }, [documents, userIdFromStorage])
-
-  useEffect(() => {
-    if (!authToken) return
-
-    const ownerIdsToFetch = Array.from(
-      new Set(sharedDocuments.map((doc) => getOwnerId(doc)).filter((id) => id && !ownerNames[id])),
-    )
-
-    if (ownerIdsToFetch.length === 0) return
-
-    let cancelled = false
-
-    const loadOwnerNames = async () => {
-      const fetchedNames = {}
-      await Promise.all(
-        ownerIdsToFetch.map(async (ownerId) => {
-          const username = await fetchOwnerName(ownerId)
-          if (!cancelled && username) {
-            fetchedNames[ownerId] = username
-          }
-        }),
-      )
-      if (!cancelled && Object.keys(fetchedNames).length > 0) {
-        setOwnerNames((prev) => ({ ...prev, ...fetchedNames }))
-      }
-    }
-
-    loadOwnerNames()
-    return () => {
-      cancelled = true
-    }
-  }, [sharedDocuments, authToken, ownerNames])
-
-  const getOwnerLabel = (item) => {
-    if (!item) return t('shar_unknown')
-
-    const ownerId = getOwnerId(item)
-    const currentUserId = userIdFromStorage || ''
-
-    if (!ownerId) {
-      const potentialOwner = normalizeSharedWithEntries(item.sharedWith).find(
-        (entry) => entry.type === 'user' && entry.name && String(entry.userId) !== currentUserId,
-      )
-      if (potentialOwner) return potentialOwner.name
-      return t('shar_unknown')
-    }
-
-    const ownerEntry = normalizeSharedWithEntries(item.sharedWith).find(
-      (entry) => entry.type === 'user' && String(entry.userId) === ownerId && entry.name,
-    )
-    if (ownerEntry) return ownerEntry.name
-
-    return ownerNames[ownerId] || ownerId
-  }
-
-  const fetchOwnerName = async (ownerId) => {
+  const DOCUMENT_TAG_BATCH_SIZE = 50
+  const authUser = useMemo(() => {
     try {
-      const response = await fetch(`${apiBase}/api/user/account/${ownerId}`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      })
-      const result = await response.json()
-      if (!response.ok) {
-        setMessage(result.message || 'Unable to fetch usernames, showing IDs instead.')
-        return null
-      }
-      return result.username || null
-    } catch (error) {
-      setMessage('Unable to fetch usernames, showing IDs instead.')
+      return JSON.parse(localStorage.getItem('authUser') || 'null')
+    } catch (err) {
       return null
+    }
+  }, [])
+  const currentUserId = authUser
+    ? String(authUser.id ?? authUser._id ?? authUser.userId ?? authUser.uid ?? '')
+    : ''
+
+  const fetchOwners = async (docs) => {
+    const ownerIds = docs
+      .map((doc) => String(doc.ownerId || doc.userId || ''))
+      .filter((id) => id && id !== currentUserId)
+    const uniqueOwnerIds = [...new Set(ownerIds)]
+    if (uniqueOwnerIds.length === 0) {
+      setOwnerMap({})
+      return
+    }
+
+    const ownerMapData = {}
+    await Promise.all(
+      uniqueOwnerIds.map(async (ownerId) => {
+        try {
+          const response = await fetch(`${apiBase}/api/user/account/${ownerId}`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+          })
+          const result = await response.json()
+          if (response.ok && result.username) {
+            ownerMapData[ownerId] = result.email || result.username || ownerId
+          } else {
+            ownerMapData[ownerId] = result.email || result.username || t('shar_unknown')
+          }
+        } catch (err) {
+          ownerMapData[ownerId] = t('shar_unknown')
+        }
+      }),
+    )
+    setOwnerMap(ownerMapData)
+  }
+
+  const fetchUserDocumentTags = async (docs) => {
+    if (!authToken || !Array.isArray(docs) || docs.length === 0) return
+    try {
+      setLoadingTags(true)
+      const documentIds = docs.map((doc) => String(doc._id)).filter(Boolean)
+      const batches = []
+      for (let index = 0; index < documentIds.length; index += DOCUMENT_TAG_BATCH_SIZE) {
+        batches.push(documentIds.slice(index, index + DOCUMENT_TAG_BATCH_SIZE))
+      }
+
+      const tagsMap = {}
+      for (const batch of batches) {
+        const response = await fetch(`${apiBase}/api/user/documents/my-tags`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ documentIds: batch }),
+        })
+        const result = await response.json()
+        if (!response.ok) {
+          continue
+        }
+
+        Object.entries(result.data || {}).forEach(([docId, docTags]) => {
+          tagsMap[String(docId)] = Array.isArray(docTags) ? docTags.map(String) : []
+        })
+      }
+
+      setDocumentUserTags(tagsMap)
+    } catch (err) {
+      // ignore
+    } finally {
+      setLoadingTags(false)
     }
   }
 
   const fetchData = async () => {
     if (!authToken) return
     setLoading(true)
+    setError('')
     setMessage('')
 
     try {
-      const response = await fetch(`${apiBase}/api/user/documents`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      })
-      const result = await response.json()
-      setDocuments(Array.isArray(result.data) ? result.data : [])
-      fetchUserDocumentTags(Array.isArray(result.data) ? result.data : [])
-    } catch (error) {
-      setMessage('Unable to load shared files. Please refresh.')
+      const [docsRes, tagsRes] = await Promise.all([
+        fetch(`${apiBase}/api/user/documents`, {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }),
+        fetch(`${apiBase}/api/user/tags`, {
+          headers: { Authorization: `Bearer ${authToken}` },
+        }),
+      ])
+      const [docsJson, tagsJson] = await Promise.all([docsRes.json(), tagsRes.json()])
+
+      const loadedDocs = Array.isArray(docsJson.data) ? docsJson.data : []
+      setDocuments(loadedDocs)
+      setTags(Array.isArray(tagsJson.data) ? tagsJson.data : [])
+      await fetchUserDocumentTags(loadedDocs)
+      await fetchOwners(loadedDocs)
+    } catch (err) {
+      setError(t('shar_loading') || 'Unable to load shared documents.')
     } finally {
       setLoading(false)
     }
   }
 
-  const fetchTags = async () => {
-    if (!authToken) return
-    setLoadingTags(true)
-    try {
-      const response = await fetch(`${apiBase}/api/user/tags`, {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      })
-      const result = await response.json()
-      if (response.ok) {
-        setTags(Array.isArray(result.data) ? result.data : [])
-      } else {
-        setMessage(result.message || 'Unable to load tags.')
-      }
-    } catch (error) {
-      setMessage('Unable to load tags.')
-    } finally {
-      setLoadingTags(false)
-    }
+  useEffect(() => {
+    fetchData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authToken])
+
+  const isCurrentUserOwner = (doc) => {
+    const ownerId = String(doc.ownerId || doc.userId || '')
+    return ownerId && ownerId === currentUserId
   }
 
-  const fetchUserDocumentTags = async (docs) => {
-    if (!authToken || !Array.isArray(docs) || docs.length === 0) return
-    try {
-      const tagPromises = docs.map((doc) =>
-        fetch(`${apiBase}/api/user/documents/${doc._id}/my-tags`, {
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-          },
-        })
-          .then((res) => res.json())
-          .then((result) => ({ docId: doc._id, tags: result.data || [] }))
-          .catch(() => ({ docId: doc._id, tags: [] })),
-      )
-      const results = await Promise.all(tagPromises)
-      const tagsMap = {}
-      results.forEach(({ docId, tags }) => {
-        tagsMap[docId] = tags
-      })
-      setDocumentUserTags(tagsMap)
-    } catch (error) {
-      // silently fail
+  const sharedDocuments = useMemo(
+    () => documents.filter((doc) => !isCurrentUserOwner(doc)),
+    [documents, currentUserId],
+  )
+
+  const matchesSearch = (doc) => {
+    if (!searchQuery.trim()) return true
+    const normalizedQuery = searchQuery.trim().toLowerCase()
+    const title = String(doc.title || '').toLowerCase()
+    const ownerName = String(ownerMap[String(doc.ownerId || doc.userId || '')] || '').toLowerCase()
+    return title.includes(normalizedQuery) || ownerName.includes(normalizedQuery)
+  }
+
+  const visibleDocuments = useMemo(
+    () => sharedDocuments.filter((doc) => matchesSearch(doc)),
+    [sharedDocuments, searchQuery, ownerMap],
+  )
+
+  const sortByPinned = (items = []) => {
+    return [...items].sort((a, b) => {
+      const aPinned = Boolean(a?.pinnedAt)
+      const bPinned = Boolean(b?.pinnedAt)
+      if (aPinned !== bPinned) {
+        return bPinned ? 1 : -1
+      }
+      if (aPinned && bPinned) {
+        const aTime = new Date(a.pinnedAt).getTime() || 0
+        const bTime = new Date(b.pinnedAt).getTime() || 0
+        if (aTime !== bTime) return bTime - aTime
+      }
+      return String(a?.title || '').localeCompare(String(b?.title || ''))
+    })
+  }
+
+  const renderTagMarkers = (item) => {
+    const itemTagIds =
+      item._id && documentUserTags[item._id]
+        ? documentUserTags[item._id].map(String)
+        : Array.isArray(item.tags)
+        ? item.tags.map(String)
+        : []
+
+    const matchedTags = tags.filter((tag) => itemTagIds.includes(String(tag._id)))
+    if (!item || !item._id || (!item.pinnedAt && matchedTags.length === 0)) {
+      return null
     }
+
+    return (
+      <div className="d-flex flex-wrap gap-1 mt-3 align-items-center">
+        {item.pinnedAt && (
+          <span className="rounded-pill border border-body-secondary px-2 py-1 small bg-warning text-dark">
+            📌 {t('home_pinned')}
+          </span>
+        )}
+        {matchedTags.slice(0, 6).map((tag) => (
+          <span
+            key={tag._id}
+            title={tag.name}
+            className="rounded-circle border border-body-secondary"
+            style={{
+              width: '10px',
+              height: '10px',
+              backgroundColor: tag.color || '#0d6efd',
+              display: 'inline-block',
+            }}
+          />
+        ))}
+        {matchedTags.length > 6 && (
+          <span className="small text-body-secondary">+{matchedTags.length - 6}</span>
+        )}
+      </div>
+    )
   }
 
   const handleToggleDocumentTag = async (doc, tagId) => {
@@ -249,196 +272,47 @@ const Shared = () => {
     }
   }
 
-  const renderTagPopover = (doc) => {
-    const activeTagIds = Array.isArray(documentUserTags[doc._id])
-      ? documentUserTags[doc._id].map(String)
-      : []
-    const isVisible = openTagPopoverDocId === String(doc._id)
-    return (
-      <CPopover
-        trigger="click"
-        placement="bottom"
-        visible={isVisible}
-        onHide={() => setOpenTagPopoverDocId(null)}
-        content={
-          <div
-            className="document-tag-popover bg-body rounded-3 border-body-secondary"
-            style={{ minWidth: '240px' }}
-          >
-            <div className="mb-3">
-              <a href="/#/options" className="text-decoration-none">
-                + Manage tags
-              </a>
-            </div>
-            {loadingTags ? (
-              <div className="text-body-secondary">Loading tags...</div>
-            ) : tags.length === 0 ? (
-              <div className="text-muted">No tags yet. Add one in Options.</div>
-            ) : (
-              <div className="d-flex flex-column gap-2">
-                {tags.map((tag) => {
-                  const checked = activeTagIds.includes(String(tag._id))
-                  return (
-                    <label
-                      htmlFor={`tag-toggle-${doc._id}-${tag._id}`}
-                      key={String(tag._id)}
-                      className="d-flex align-items-center justify-content-between rounded-3 p-2 bg-body border border-body-secondary"
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <span className="d-flex align-items-center gap-2">
-                        <span
-                          style={{
-                            width: '10px',
-                            height: '10px',
-                            borderRadius: '50%',
-                            backgroundColor: tag.color || '#0d6efd',
-                            display: 'inline-block',
-                          }}
-                        />
-                        <span>{tag.name}</span>
-                      </span>
-                      <input
-                        id={`tag-toggle-${doc._id}-${tag._id}`}
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) => {
-                          event.stopPropagation()
-                          handleToggleDocumentTag(doc, tag._id)
-                        }}
-                      />
-                    </label>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        }
-      >
-        <CButton
-          size="sm"
-          color="secondary"
-          className="rounded-pill px-3 document-tag-trigger"
-          onClick={(event) => {
-            event.stopPropagation()
-            setOpenTagPopoverDocId((current) =>
-              current === String(doc._id) ? null : String(doc._id),
-            )
-          }}
-        >
-          Tag
-        </CButton>
-      </CPopover>
-    )
-  }
-
-  const renderTagMarkers = (item) => {
-    const itemTagIds =
-      item._id && documentUserTags[item._id]
-        ? documentUserTags[item._id].map(String)
-        : Array.isArray(item.tags)
-          ? item.tags.map(String)
-          : []
-    if (itemTagIds.length === 0 || tags.length === 0) {
-      return null
-    }
-
-    const matchedTags = tags.filter((tag) => itemTagIds.includes(String(tag._id)))
-    if (matchedTags.length === 0) {
-      return null
-    }
-
-    return (
-      <div className="d-flex flex-wrap gap-1 mt-3">
-        {matchedTags.slice(0, 6).map((tag) => (
-          <span
-            key={tag._id}
-            title={tag.name}
-            className="rounded-circle border border-body-secondary"
-            style={{
-              width: '10px',
-              height: '10px',
-              backgroundColor: tag.color || '#0d6efd',
-              display: 'inline-block',
-            }}
-          />
-        ))}
-        {matchedTags.length > 6 && (
-          <span className="small text-body-secondary">+{matchedTags.length - 6}</span>
-        )}
-      </div>
-    )
-  }
-
-  const renderItemActions = (type, item) => (
-    <ItemActions
-      type={type}
-      item={item}
-      onShare={shareItem}
-      onMoreActions={moreActions}
-      shareLabel={t('home_shareButton') || 'Share'}
-      tagPopover={
-        type === 'document' ? (
-          <DocumentTagPopover
-            doc={item}
-            openTagPopoverDocId={openTagPopoverDocId}
-            setOpenTagPopoverDocId={setOpenTagPopoverDocId}
-            tags={tags}
-            loadingTags={loadingTags}
-            onToggleTag={handleToggleDocumentTag}
-            activeTagIds={documentUserTags[item._id]}
-            t={t}
-          />
-        ) : null
-      }
-    />
-  )
-
-  useEffect(() => {
-    fetchData()
-    fetchTags()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authToken])
-
-  useEffect(() => {
-    if (!openTagPopoverDocId) {
-      return undefined
-    }
-
-    const handleDocumentClick = (event) => {
-      if (
-        event.target.closest('.document-tag-popover') ||
-        event.target.closest('.document-tag-trigger')
-      ) {
+  const handleTogglePin = async (item) => {
+    if (!authToken || !item || !item._id) return
+    try {
+      const response = await fetch(`${apiBase}/api/user/documents/${item._id}/pin`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ pinned: !Boolean(item.pinnedAt) }),
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        setMessage(result.message || 'Unable to update pin state.')
         return
       }
-      setOpenTagPopoverDocId(null)
+      setDocuments((prev) => prev.map((doc) => (String(doc._id) === String(item._id) ? result.data : doc)))
+      setMessage('Document pin state updated.')
+    } catch (error) {
+      setMessage('Unable to update pin state. Please try again.')
     }
+  }
 
-    document.addEventListener('mousedown', handleDocumentClick)
-    return () => {
-      document.removeEventListener('mousedown', handleDocumentClick)
-    }
-  }, [openTagPopoverDocId])
+  const handleSelectDocument = (doc) => {
+    setSelectedDocId(String(doc._id))
+    setMessage('')
+  }
 
   const downloadDocument = async (doc) => {
-    if (!authToken) {
-      setMessage('You must be logged in to download documents.')
-      return
-    }
-
+    if (!authToken || !doc || !doc._id) return
     try {
       const response = await fetch(`${apiBase}/api/user/documents/${doc._id}/download`, {
         headers: {
           Authorization: `Bearer ${authToken}`,
         },
       })
-
       if (!response.ok) {
         const result = await response.json()
         setMessage(result.message || 'Unable to download document.')
         return
       }
-
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -453,131 +327,399 @@ const Shared = () => {
     }
   }
 
-  const handleSelectDocument = (doc) => {
-    setSelected({ type: 'document', id: doc._id })
-    setMessage('')
+  const getOwnerLabel = (item) => {
+    const ownerId = item?.ownerId || item?.userId || item?.createdBy || null
+    if (!ownerId) return t('shar_unknown')
+    if (String(ownerId) === currentUserId) return t('shar_you') || 'You'
+    return ownerMap[String(ownerId)] || String(ownerId)
   }
 
-  const shareItem = async (type, item) => {
-    if (!authToken) {
-      setMessage('You must be logged in to share items.')
+  const openShareModal = (type, item) => {
+    setShareModalItem(item)
+    setShareModalEmail('')
+    setShareModalOrgId('')
+    setShareModalRole('read-only')
+    setShareModalError('')
+    setMessage('')
+    setShowShareModal(true)
+    fetchOrganizations()
+  }
+
+  const closeShareModal = () => {
+    setShowShareModal(false)
+    setShareModalItem(null)
+    setShareModalError('')
+  }
+
+  const getShareEndpoint = (type, itemId) => {
+    if (type === 'document') return `/api/user/documents/${itemId}/share`
+    return null
+  }
+
+  const normalizeSharedWithEntries = (sharedWith) => {
+    if (!Array.isArray(sharedWith)) return []
+    return sharedWith
+      .map((entry) => {
+        if (!entry) return null
+        if (typeof entry === 'string' || typeof entry === 'number') {
+          return { type: 'user', userId: String(entry) }
+        }
+        if (entry.userId) {
+          return {
+            type: 'user',
+            userId: String(entry.userId),
+            role: entry.role,
+            email: entry.email || null,
+            name: entry.name || null,
+          }
+        }
+        if (entry.orgId) {
+          return {
+            type: 'org',
+            orgId: String(entry.orgId),
+            role: entry.role,
+            name: entry.name || null,
+          }
+        }
+        return null
+      })
+      .filter(Boolean)
+  }
+
+  const getShareEntries = (item) => {
+    if (!item) return []
+    const currentUserIdLocal = currentUserId
+    return normalizeSharedWithEntries(item.sharedWith).map((entry) => {
+      if (entry.type === 'user') {
+        const userId = String(entry.userId || '')
+        const ownerLabel = userId === currentUserIdLocal ? t('shar_you') || 'You' : entry.name || entry.email || userId
+        const details = entry.role ? `${ownerLabel} (${entry.role})` : ownerLabel
+        return { ...entry, id: userId, label: details }
+      }
+
+      if (entry.type === 'org') {
+        const orgId = String(entry.orgId || '')
+        const org = organizations.find((orgItem) => String(orgItem._id) === orgId)
+        const orgLabel = entry.name || org?.name || org?.title || orgId
+        const details = entry.role ? `${orgLabel} (${entry.role})` : orgLabel
+        return { ...entry, id: orgId, label: details }
+      }
+
+      return {
+        type: 'unknown',
+        id: String(entry?.userId || entry?.orgId || ''),
+        label: String(entry?.name || entry?.email || entry?.id || t('shar_unknown')),
+      }
+    })
+  }
+
+  const canManageShareEntries = (item) => {
+    if (!item || !currentUserId) return false
+    const ownerId = String(item.ownerId || item.userId || '')
+    return ownerId === currentUserId
+  }
+
+  const handleRemoveShare = async (entry) => {
+    if (!authToken || !shareModalItem || !entry) {
+      setShareModalError(t('shar_removefail') || 'Unable to remove share entry.')
       return
     }
 
-    const targetEmail = window.prompt(`Share this ${type} with (user email):`)
-    if (!targetEmail || !targetEmail.trim()) {
-      return
-    }
-
-    const endpointMap = {
-      document: `/api/user/documents/${item._id}/share`,
-    }
-    const endpoint = endpointMap[type]
+    const endpoint = getShareEndpoint('document', shareModalItem._id)
     if (!endpoint) {
-      setMessage(`Unable to share ${type}.`)
+      setShareModalError(t('shar_removefail') || 'Unable to remove share entry.')
       return
     }
+
+    const body =
+      entry.type === 'user'
+        ? { targetUserId: String(entry.userId) }
+        : { targetOrgId: String(entry.orgId) }
 
     try {
       const response = await fetch(`${apiBase}${endpoint}`, {
-        method: 'POST',
+        method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
         },
-        body: JSON.stringify({ targetEmail: targetEmail.trim() }),
+        body: JSON.stringify(body),
       })
       const result = await response.json()
       if (!response.ok) {
-        setMessage(result.message || `Unable to share ${type}.`)
-        return
+        throw new Error(result.message || t('shar_removefail') || 'Unable to remove share entry.')
       }
-      setMessage(
-        `${type.charAt(0).toUpperCase() + type.slice(1)} shared with ${targetEmail.trim()}.`,
-      )
+
+      setShareModalItem((prevItem) => {
+        if (!prevItem) return prevItem
+        const updatedSharedWith = normalizeSharedWithEntries(prevItem.sharedWith).filter((existing) => {
+          if (entry.type === 'user') {
+            return String(existing.userId) !== String(entry.userId)
+          }
+          if (entry.type === 'org') {
+            return String(existing.orgId) !== String(entry.orgId)
+          }
+          return true
+        })
+        return {
+          ...prevItem,
+          sharedWith: updatedSharedWith,
+        }
+      })
+      await fetchData()
+      setMessage(t('shar_removed') || 'Share access removed successfully.')
     } catch (error) {
-      setMessage(`Unable to share ${type}. Please try again.`)
+      setShareModalError(error.message || t('shar_removefail') || 'Unable to remove share entry.')
     }
   }
 
-  const moreActions = (type, item) => {
-    setMessage(`More actions for ${type} '${item.title}' coming soon.`)
+  const shareItemByEmail = async (itemId, email, roleParam) => {
+    const endpoint = getShareEndpoint('document', itemId)
+    if (!endpoint) {
+      throw new Error(t('shar_sharefail') || 'Unable to share document.')
+    }
+    const response = await fetch(`${apiBase}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ targetEmail: email.trim(), role: roleParam || shareModalRole }),
+    })
+    const result = await response.json()
+    if (!response.ok) {
+      throw new Error(result.message || t('shar_sharefail') || `Unable to share document with ${email}.`)
+    }
+    return email.trim()
   }
 
+  const handleShareSubmit = async () => {
+    setShareModalError('')
+    setMessage('')
+    if (!authToken) {
+      setShareModalError(t('shar_login') || 'You must be logged in to share items.')
+      return
+    }
+    if (!shareModalItem) {
+      setShareModalError(t('shar_noselect') || 'No item selected.')
+      return
+    }
+    if (!shareModalEmail.trim() && !shareModalOrgId) {
+      setShareModalError(t('shar_sharewithrequired') || 'Enter an email or choose an organization to share with.')
+      return
+    }
+
+    try {
+      const sharedParts = []
+      if (shareModalEmail.trim()) {
+        await shareItemByEmail(shareModalItem._id, shareModalEmail.trim(), shareModalRole)
+        sharedParts.push(`user ${shareModalEmail.trim()}`)
+      }
+      if (shareModalOrgId) {
+        const response = await fetch(`${apiBase}${getShareEndpoint('document', shareModalItem._id)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ targetOrgId: shareModalOrgId, role: shareModalRole }),
+        })
+        const r = await response.json()
+        if (!response.ok) throw new Error(r.message || t('shar_sharefail') || 'Unable to share organization')
+        sharedParts.push(`organization ${shareModalOrgId}`)
+      }
+      await fetchData()
+      setMessage(
+        `Document shared successfully.${sharedParts.length > 0 ? ` Shared with ${sharedParts.join(' and ')}.` : ''}`,
+      )
+      closeShareModal()
+    } catch (error) {
+      setShareModalError(error.message || t('shar_sharefail') || 'Unable to share item.')
+    }
+  }
+
+  const fetchOrganizations = async () => {
+    if (!authToken) {
+      setOrganizations([])
+      return
+    }
+    setLoadingOrgs(true)
+    try {
+      const response = await fetch(`${apiBase}/api/organizations`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        setOrganizations([])
+        return
+      }
+      setOrganizations(Array.isArray(result.data) ? result.data : [])
+    } catch (error) {
+      setOrganizations([])
+    } finally {
+      setLoadingOrgs(false)
+    }
+  }
+
+  const handleOpenDocumentUpdateModal = () => {
+    setMessage(t('shar_updateUnsupported') || 'Update document is not available on shared items.')
+    setOpenMoreActionsDocId(null)
+  }
+
+  const handleOpenRevisionHistoryModal = () => {
+    setMessage(t('shar_revisionUnsupported') || 'Revision history is not available on shared items.')
+    setOpenMoreActionsDocId(null)
+  }
+
+  useEffect(() => {
+    if (!openMoreActionsDocId && !openTagPopoverDocId) {
+      return undefined
+    }
+    const handleDocumentClick = (event) => {
+      if (
+        event.target.closest('.document-action-popover') ||
+        event.target.closest('.document-action-trigger') ||
+        event.target.closest('.document-tag-popover') ||
+        event.target.closest('.document-tag-trigger')
+      ) {
+        return
+      }
+      setOpenMoreActionsDocId(null)
+      setOpenTagPopoverDocId(null)
+    }
+    document.addEventListener('mousedown', handleDocumentClick)
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick)
+    }
+  }, [openMoreActionsDocId, openTagPopoverDocId])
+
   return (
-    <CRow className="mb-4">
-      <CCol>
-        <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-3 mb-4">
-          <div>
-            <h1 className="display-6 mb-0">{t('shar_title')}</h1>
-            <div className="text-body-secondary">{t('shar_desc')}</div>
-          </div>
-          <div className="d-flex flex-wrap gap-2">
-            <CButton
-              color="secondary"
-              size="sm"
-              className="rounded-pill px-3"
-              onClick={() => navigate('/')}
-            >
-              <CIcon icon={cilArrowLeft} className="me-2" />
-              {t('shar_goBack')}
-            </CButton>
-          </div>
-        </div>
+    <CContainer>
+      <CRow className="justify-content-center">
+        <CCol xl={10} lg={12}>
+          <CCard>
+            <CCardHeader>{t('shar_title')}</CCardHeader>
+            <CCardBody>
+              <p className="text-muted mb-4">{t('shar_desc')}</p>
+              {error && <div className="mb-3 text-danger">{error}</div>}
+              {message && <div className="mb-3 text-success">{message}</div>}
 
-        <CInputGroup className="mb-4 rounded-pill overflow-hidden border border-1 border-body-secondary">
-          <CInputGroupText className="bg-body-secondary border-0 text-body-secondary">
-            <CIcon icon={cilSearch} />
-          </CInputGroupText>
-          <CFormInput placeholder="Search Document" className="border-0" disabled />
-        </CInputGroup>
+              <div className="d-flex flex-column flex-sm-row gap-3 mb-4">
+                <CFormInput
+                  placeholder={t('shome_sharedwithemail') || 'Search by owner email or title'}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <CButton
+                  color="secondary"
+                  onClick={() => {
+                    setSearchQuery('')
+                  }}
+                >
+                  {t('shome_clearFilter') || 'Clear'}
+                </CButton>
+              </div>
 
-        <CCard className="bg-body-secondary rounded-4 p-4 mb-4">
-          <CCardBody>
-            {loading ? (
-              <div className="text-center text-body-secondary">{t('shar_loading')}</div>
-            ) : sharedDocuments.length === 0 ? (
-              <div className="text-center text-body-secondary">{t('shar_noDocs')}</div>
-            ) : (
-              <CRow className="g-3">
-                {sharedDocuments.map((doc) => {
-                  const isSelected =
-                    selected.type === 'document' && String(selected.id) === String(doc._id)
-                  return (
-                    <CCol xs={12} sm={6} lg={4} key={doc._id}>
-                      <div
-                        className={`h-100 d-flex flex-column p-3 rounded-4 ${
-                          isSelected
-                            ? 'bg-primary text-white'
-                            : 'bg-body border border-body-secondary'
-                        }`}
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => handleSelectDocument(doc)}
-                        onDoubleClick={() => downloadDocument(doc)}
-                      >
-                        <div className="d-flex align-items-start gap-2 mb-3">
-                          <CIcon icon={cilFile} className="fs-4" />
-                          <div>
-                            <div className="fw-semibold">{doc.title}</div>
-                            <div className="text-body-secondary small">
-                              {t('shar_from')} <strong>{getOwnerLabel(doc)}</strong>
+              {loading ? (
+                <p className="text-body-secondary">{t('shar_loading')}</p>
+              ) : visibleDocuments.length === 0 ? (
+                <p className="text-muted">{t('shar_noDocs')}</p>
+              ) : (
+                <CRow className="g-3">
+                  {sortByPinned(visibleDocuments).map((doc) => {
+                    const isSelected = selectedDocId === String(doc._id)
+                    const ownerName = getOwnerLabel(doc)
+                    return (
+                      <CCol xs={12} sm={6} lg={4} key={String(doc._id)}>
+                        <div
+                          className={`h-100 d-flex flex-column p-3 rounded-4 ${
+                            isSelected
+                              ? 'bg-primary text-white'
+                              : 'bg-body border border-body-secondary'
+                          }`}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => handleSelectDocument(doc)}
+                          onDoubleClick={() => downloadDocument(doc)}
+                        >
+                          <div className="d-flex align-items-start gap-2 mb-3">
+                            <CIcon icon={cilFile} className="fs-4" />
+                            <div>
+                              <div className="fw-semibold">{doc.title || t('shar_unknown')}</div>
+                              <div className="text-body-secondary small mt-1">
+                                {t('shar_from')} {ownerName}
+                              </div>
                             </div>
-                            {renderTagMarkers(doc)}
+                          </div>
+                          {renderTagMarkers(doc)}
+                          <div className="mt-auto">
+                            <ItemActions
+                              type="document"
+                              item={doc}
+                              onShare={openShareModal}
+                              onMoreActions={() => {}}
+                              shareLabel={t('home_shareButton')}
+                              moreActionsPopover={
+                                <DocumentActionPopover
+                                  doc={doc}
+                                  openMoreActionsDocId={openMoreActionsDocId}
+                                  setOpenMoreActionsDocId={setOpenMoreActionsDocId}
+                                  onOpenUpdateDocument={handleOpenDocumentUpdateModal}
+                                  onOpenRevisionHistory={handleOpenRevisionHistoryModal}
+                                  t={t}
+                                />
+                              }
+                              tagPopover={
+                                <DocumentTagPopover
+                                  item={doc}
+                                  itemType="document"
+                                  openTagPopoverDocId={openTagPopoverDocId}
+                                  setOpenTagPopoverDocId={setOpenTagPopoverDocId}
+                                  tags={tags}
+                                  loadingTags={loadingTags}
+                                  onToggleTag={handleToggleDocumentTag}
+                                  onTogglePin={handleTogglePin}
+                                  activeTagIds={documentUserTags[doc._id]}
+                                  pinned={Boolean(doc.pinnedAt)}
+                                  t={t}
+                                />
+                              }
+                            />
                           </div>
                         </div>
-                        <div className="mt-auto">{renderItemActions('document', doc)}</div>
-                      </div>
-                    </CCol>
-                  )
-                })}
-              </CRow>
-            )}
-          </CCardBody>
-        </CCard>
+                      </CCol>
+                    )
+                  })}
+                </CRow>
+              )}
 
-        {message && <div className="alert alert-info rounded-4 px-4 py-3">{message}</div>}
-      </CCol>
-    </CRow>
+              <ShareModal
+                visible={showShareModal}
+                onClose={closeShareModal}
+                type="document"
+                item={shareModalItem}
+                ownerLabel={shareModalItem ? getOwnerLabel(shareModalItem) : t('shar_unknown')}
+                sharedWithEntries={shareModalItem ? getShareEntries(shareModalItem) : []}
+                organizations={organizations}
+                loadingOrgs={loadingOrgs}
+                error={shareModalError}
+                email={shareModalEmail}
+                onEmailChange={setShareModalEmail}
+                orgId={shareModalOrgId}
+                onOrgChange={setShareModalOrgId}
+                role={shareModalRole}
+                onRoleChange={setShareModalRole}
+                onSubmit={handleShareSubmit}
+                onRemoveShare={handleRemoveShare}
+                canManageShare={canManageShareEntries(shareModalItem)}
+                t={t}
+              />
+            </CCardBody>
+          </CCard>
+        </CCol>
+      </CRow>
+    </CContainer>
   )
 }
 

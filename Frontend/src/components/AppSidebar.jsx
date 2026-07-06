@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-
+import { useLocation } from 'react-router-dom'
 import {
   CCloseButton,
   CNavItem,
@@ -50,6 +50,9 @@ const AppSidebar = () => {
     }
   }, [])
 
+  const location = useLocation()
+  const translatedNavigation = useMemo(() => getNavigation(t), [t])
+
   useEffect(() => {
     const authToken = localStorage.getItem('authToken')
     if (!authToken) return
@@ -76,9 +79,25 @@ const AppSidebar = () => {
     }
 
     loadSidebarData()
-  }, [])
+  }, [location.pathname, location.search])
 
-  const translatedNavigation = useMemo(() => getNavigation(t), [t])
+  const currentHomeQuery = useMemo(() => {
+    const search = location.search || window.location.href.split('?')[1] || ''
+    const params = new URLSearchParams(search)
+    return {
+      setId: params.get('setId'),
+    }
+  }, [location.search, location.hash])
+
+  const buildTagLink = (tagId) => {
+    const params = new URLSearchParams()
+    if (location.pathname === '/' && currentHomeQuery.setId) {
+      params.set('setId', currentHomeQuery.setId)
+    }
+    params.set('tagId', tagId)
+    return `/?${params.toString()}`
+  }
+
 
   const sidebarItems = useMemo(() => {
     const items = [...translatedNavigation]
@@ -107,7 +126,7 @@ const AppSidebar = () => {
         items.push({
           component: CNavItem,
           name: tag.name,
-          to: '/', /* TODO: Implement tag filtering route via search bar in Home */
+          to: buildTagLink(tag._id),
           icon: (
             <CIcon
               icon={cilTag}
@@ -120,7 +139,7 @@ const AppSidebar = () => {
     }
 
     return items
-  }, [navigation, sets, tags])
+  }, [translatedNavigation, sets, tags, currentHomeQuery, location.pathname])
 
   return (
     <CSidebar

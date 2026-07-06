@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   CAlert,
   CButton,
@@ -9,12 +9,14 @@ import {
   CContainer,
   CForm,
   CFormInput,
+  CFormSelect,
   CInputGroup,
   CInputGroupText,
   CRow,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import { cilLockLocked, cilUser } from '@coreui/icons'
+import { useLanguage } from '../../../i18n'
 
 const apiBase = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -27,6 +29,7 @@ const Register = () => {
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const { t, language, setLanguage, availableLanguages } = useLanguage()
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -66,23 +69,39 @@ const Register = () => {
   }
 
   return (
-    <div className="bg-body-tertiary min-vh-100 d-flex flex-row align-items-center">
+    <div className="bg-body-tertiary min-vh-100 d-flex align-items-center py-5">
       <CContainer>
         <CRow className="justify-content-center">
-          <CCol md={9} lg={7} xl={6}>
-            <CCard className="mx-4">
+          <CCol xs={12} md={10} lg={8} xl={6}>
+            <CCard className="mx-0 mx-md-4">
               <CCardBody className="p-4">
+                <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+                  <div>
+                    <h1>{t('register_title')}</h1>
+                    <p className="text-body-secondary mb-0">{t('register_desc')}</p>
+                  </div>
+                  <CFormSelect
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    style={{ maxWidth: '14rem' }}
+                    aria-label="Language selector"
+                  >
+                    {availableLanguages.map((lang) => (
+                      <option key={lang.code} value={lang.code}>
+                        {lang.label}
+                      </option>
+                    ))}
+                  </CFormSelect>
+                </div>
+                {error && <CAlert color="danger">{error}</CAlert>}
+                {success && <CAlert color="success">{success}</CAlert>}
                 <CForm onSubmit={handleSubmit}>
-                  <h1>Register</h1>
-                  <p className="text-body-secondary">Create your account</p>
-                  {error && <CAlert color="danger">{error}</CAlert>}
-                  {success && <CAlert color="success">{success}</CAlert>}
                   <CInputGroup className="mb-3">
                     <CInputGroupText>
                       <CIcon icon={cilUser} />
                     </CInputGroupText>
                     <CFormInput
-                      placeholder="Username"
+                      placeholder={t('register_username')}
                       autoComplete="username"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
@@ -92,7 +111,7 @@ const Register = () => {
                     <CInputGroupText>@</CInputGroupText>
                     <CFormInput
                       type="email"
-                      placeholder="Email"
+                      placeholder={t('register_email')}
                       autoComplete="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -104,7 +123,7 @@ const Register = () => {
                     </CInputGroupText>
                     <CFormInput
                       type="password"
-                      placeholder="Password"
+                      placeholder={t('register_password')}
                       autoComplete="new-password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -116,16 +135,22 @@ const Register = () => {
                     </CInputGroupText>
                     <CFormInput
                       type="password"
-                      placeholder="Repeat password"
+                      placeholder={t('register_confirmPassword')}
                       autoComplete="new-password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                     />
                   </CInputGroup>
-                  <div className="d-grid">
+                  <div className="d-grid gap-3">
                     <CButton color="success" type="submit" disabled={loading}>
-                      {loading ? 'Creating account...' : 'Create Account'}
+                      {loading ? t('register_creatingAccount') : t('register_button')}
                     </CButton>
+                    <div className="text-center">
+                      <span className="text-body-secondary">
+                        {t('register_haveAccount')}{' '}
+                        <Link to="/login">{t('register_loginNow')}</Link>
+                      </span>
+                    </div>
                   </div>
                 </CForm>
               </CCardBody>

@@ -115,11 +115,11 @@ const findAccessibleFoldersForUser = async (userId) => {
 
     const orClauses = [ { ownerId: new ObjectId(userId) }, { sharedWith: new ObjectId(userId) }, { 'sharedWith.userId': new ObjectId(userId) } ]
     if (orgIds.length > 0) orClauses.push({ 'sharedWith.orgId': { $in: orgIds } })
-    return collections.folders.find({ $or: orClauses }).toArray()
+    return collections.folders.find({ deletedAt: { $exists: false }, $or: orClauses }).toArray()
   }
 
   return Promise.all(fallbackFolders.map(async (folder) => ({ folder, ok: await sharedWithContainsUser(folder.sharedWith, userId) })))
-    .then((arr) => arr.filter((r) => String(r.folder.ownerId) === String(userId) || r.ok).map((r) => r.folder))
+    .then((arr) => arr.filter((r) => !r.folder.deletedAt && (String(r.folder.ownerId) === String(userId) || r.ok)).map((r) => r.folder))
 }
 
 const findAccessibleSetsForUser = async (userId) => {
@@ -135,11 +135,11 @@ const findAccessibleSetsForUser = async (userId) => {
 
     const orClauses = [ { ownerId: new ObjectId(userId) }, { sharedWith: new ObjectId(userId) }, { 'sharedWith.userId': new ObjectId(userId) } ]
     if (orgIds.length > 0) orClauses.push({ 'sharedWith.orgId': { $in: orgIds } })
-    return collections.sets.find({ $or: orClauses }).toArray()
+    return collections.sets.find({ deletedAt: { $exists: false }, $or: orClauses }).toArray()
   }
 
   return Promise.all(fallbackSets.map(async (setItem) => ({ setItem, ok: await sharedWithContainsUser(setItem.sharedWith, userId) })))
-    .then((arr) => arr.filter((r) => String(r.setItem.ownerId) === String(userId) || r.ok).map((r) => r.setItem))
+    .then((arr) => arr.filter((r) => !r.setItem.deletedAt && (String(r.setItem.ownerId) === String(userId) || r.ok)).map((r) => r.setItem))
 }
 
 const findDocumentById = async (documentId) => {
@@ -219,6 +219,130 @@ const updateDocument = async (documentId, updateFields) => {
 
   fallbackDocs[fallbackIndex] = { ...fallbackDocs[fallbackIndex], ...updateFields }
   return { value: fallbackDocs[fallbackIndex] }
+}
+
+const updateFolder = async (folderId, updateFields) => {
+  if (isMongoConnected() && collections.folders) {
+    return collections.folders.findOneAndUpdate(
+      { _id: new ObjectId(folderId) },
+      { $set: updateFields },
+      { returnDocument: 'after' },
+    )
+  }
+
+  const fallbackIndex = fallbackFolders.findIndex((folder) => String(folder._id) === String(folderId))
+  if (fallbackIndex === -1) {
+    return { value: null }
+  }
+
+  fallbackFolders[fallbackIndex] = { ...fallbackFolders[fallbackIndex], ...updateFields }
+  return { value: fallbackFolders[fallbackIndex] }
+}
+
+const deleteFolder = async (folderId, deletedBy = null) => {
+  const deleteFields = {
+    deletedAt: new Date(),
+    deletedBy: deletedBy ? String(deletedBy) : null,
+    updatedAt: new Date(),
+  }
+
+  if (isMongoConnected() && collections.folders && collections.documents) {
+    const folderObjectId = new ObjectId(folderId)
+    const existingFolder = await collections.folders.findOne({ _id: folderObjectId })
+    if (!existingFolder) {
+      return { value: null }
+    }
+
+    await collections.documents.updateMany(
+      { folderId: folderObjectId },
+      { $set: deleteFields },
+    )
+
+    return collections.folders.findOneAndUpdate(
+      { _id: folderObjectId },
+      { $set: deleteFields },
+      { returnDocument: 'after' },
+    )
+  }
+
+  const fallbackIndex = fallbackFolders.findIndex((folder) => String(folder._id) === String(folderId))
+  if (fallbackIndex === -1) {
+    return { value: null }
+  }
+
+  fallbackFolders[fallbackIndex] = { ...fallbackFolders[fallbackIndex], ...deleteFields }
+  fallbackDocs.forEach((doc) => {
+    if (String(doc.folderId) === String(folderId)) {
+      Object.assign(doc, deleteFields)
+    }
+  })
+  return { value: fallbackFolders[fallbackIndex] }
+}
+
+const deleteSet = async (setId, deletedBy = null) => {
+  const deleteFields = {
+    deletedAt: new Date(),
+    deletedBy: deletedBy ? String(deletedBy) : null,
+    updatedAt: new Date(),
+  }
+
+  if (isMongoConnected() && collections.sets && collections.folders && collections.documents) {
+    const setObjectId = new ObjectId(setId)
+    const existingSet = await collections.sets.findOne({ _id: setObjectId })
+    if (!existingSet) {
+      return { value: null }
+    }
+
+    const foldersInSet = await collections.folders.find({ setId: setObjectId }).project({ _id: 1 }).toArray()
+    const folderIds = foldersInSet.map((folder) => folder._id)
+
+    if (folderIds.length > 0) {
+      await collections.documents.updateMany(
+        { $or: [{ setId: setObjectId }, { folderId: { $in: folderIds } }] },
+        { $set: deleteFields },
+      )
+    } else {
+      await collections.documents.updateMany(
+        { setId: setObjectId },
+        { $set: deleteFields },
+      )
+    }
+
+    await collections.folders.updateMany(
+      { setId: setObjectId },
+      { $set: deleteFields },
+    )
+
+    return collections.sets.findOneAndUpdate(
+      { _id: setObjectId },
+      { $set: deleteFields },
+      { returnDocument: 'after' },
+    )
+  }
+
+  const fallbackIndex = fallbackSets.findIndex((setItem) => String(setItem._id) === String(setId))
+  if (fallbackIndex === -1) {
+    return { value: null }
+  }
+
+  fallbackSets[fallbackIndex] = { ...fallbackSets[fallbackIndex], ...deleteFields }
+  const folderIds = fallbackFolders
+    .filter((folder) => String(folder.setId) === String(setId))
+    .map((folder) => String(folder._id))
+
+  fallbackFolders.forEach((folder) => {
+    if (String(folder.setId) === String(setId)) {
+      Object.assign(folder, deleteFields)
+    }
+  })
+
+  fallbackDocs.forEach((doc) => {
+    if (String(doc.setId) === String(setId) || folderIds.includes(String(doc.folderId))) {
+      Object.assign(doc, deleteFields)
+    }
+  })
+
+  return { value: fallbackSets[fallbackIndex] }
 }
 
 const insertFolder = async (folder) => {
@@ -302,6 +426,30 @@ const findUserDocumentTags = async (userId, documentId) => {
   return fallbackUserDocumentTags.find(
     (udt) => String(udt.userId) === String(userId) && String(udt.documentId) === String(documentId),
   )
+}
+
+const findUserDocumentTagsForDocuments = async (userId, documentIds = []) => {
+  const normalizedDocumentIds = [...new Set((Array.isArray(documentIds) ? documentIds : []).map(String).filter(Boolean))]
+  if (normalizedDocumentIds.length === 0) return {}
+
+  if (isMongoConnected() && collections.userDocumentTags) {
+    const records = await collections.userDocumentTags.find({
+      userId: new ObjectId(userId),
+      documentId: { $in: normalizedDocumentIds.map((id) => new ObjectId(id)) },
+    }).toArray()
+
+    return records.reduce((acc, record) => {
+      acc[String(record.documentId)] = Array.isArray(record.tags) ? record.tags.map(String) : []
+      return acc
+    }, {})
+  }
+
+  return fallbackUserDocumentTags.reduce((acc, record) => {
+    if (String(record.userId) !== String(userId)) return acc
+    if (!normalizedDocumentIds.includes(String(record.documentId))) return acc
+    acc[String(record.documentId)] = Array.isArray(record.tags) ? record.tags.map(String) : []
+    return acc
+  }, {})
 }
 
 const upsertUserDocumentTags = async (userId, documentId, tags) => {
@@ -575,13 +723,17 @@ module.exports = {
   findSetById,
   insertDocument,
   updateDocument,
+  updateFolder,
   insertFolder,
   insertSet,
+  deleteFolder,
+  deleteSet,
   findTagsForUser,
   insertTag,
   updateTag,
   deleteTag,
   findUserDocumentTags,
+  findUserDocumentTagsForDocuments,
   upsertUserDocumentTags,
   normalizeSharedWithEntries,
   sharedWithContainsUser,

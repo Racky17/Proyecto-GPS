@@ -15,6 +15,9 @@ const {
   insertDocument,
   findDocumentForUser,
   updateDocument,
+  updateFolder,
+  deleteFolder,
+  deleteSet,
   findDocumentById,
   findFolderById,
   findSetById,
@@ -274,9 +277,17 @@ router.post('/api/user/documents', authenticate, upload.single('file'), async (r
     const document = {
       userId: req.user._id,
       ownerId: req.user._id,
-      sharedWith: sharedWith.map((entry) =>
-        isMongoConnected() ? { userId: new ObjectId(entry.userId), role: entry.role } : entry,
-      ),
+      sharedWith: sharedWith.map((entry) => {
+        if (entry.type === 'org') {
+          return isMongoConnected()
+            ? { orgId: new ObjectId(entry.orgId), role: entry.role, name: entry.name || null }
+            : { orgId: String(entry.orgId), role: entry.role, name: entry.name || null }
+        }
+
+        return isMongoConnected()
+          ? { userId: new ObjectId(entry.userId), role: entry.role, email: entry.email || null, name: entry.name || null }
+          : { userId: String(entry.userId), role: entry.role, email: entry.email || null, name: entry.name || null }
+      }),
       title,
       folderId: folderId || null,
       setId: setId || null,
@@ -530,6 +541,46 @@ router.delete('/api/user/documents/:id', authenticate, async (req, res) => {
   }
 })
 
+router.delete('/api/user/folders/:id', authenticate, async (req, res) => {
+  const folderId = req.params.id
+
+  try {
+    const existingFolder = await findFolderById(folderId)
+    if (!existingFolder || existingFolder.deletedAt || String(existingFolder.ownerId) !== String(req.user._id)) {
+      return res.status(404).json({ message: 'Folder not found.' })
+    }
+
+    const result = await deleteFolder(folderId, req.user._id)
+    if (isMongoConnected() && !result.value) {
+      return res.status(404).json({ message: 'Folder not found.' })
+    }
+
+    res.json({ message: 'Folder deleted successfully.' })
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to delete folder.' })
+  }
+})
+
+router.delete('/api/user/sets/:id', authenticate, async (req, res) => {
+  const setId = req.params.id
+
+  try {
+    const existingSet = await findSetById(setId)
+    if (!existingSet || existingSet.deletedAt || String(existingSet.ownerId) !== String(req.user._id)) {
+      return res.status(404).json({ message: 'Set not found.' })
+    }
+
+    const result = await deleteSet(setId, req.user._id)
+    if (isMongoConnected() && !result.value) {
+      return res.status(404).json({ message: 'Set not found.' })
+    }
+
+    res.json({ message: 'Set deleted successfully.' })
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to delete set.' })
+  }
+})
+
 router.put('/api/user/documents/:id', authenticate, async (req, res) => {
   const documentId = req.params.id
   const { tags } = req.body
@@ -561,122 +612,59 @@ router.put('/api/user/documents/:id', authenticate, async (req, res) => {
   }
 })
 
-router.get('/api/user/tags', authenticate, async (req, res) => {
-  try {
-    const tags = await findTagsForUser(req.user._id)
-    res.json({ data: tags })
-  } catch (error) {
-    res.status(500).json({ message: 'Unable to load tags.' })
-  }
-})
+router.put('/api/user/documents/:id/pin', authenticate, async (req, res) => {
+  const documentId = req.params.id
+  const { pinned } = req.body
 
-router.post('/api/user/tags', authenticate, async (req, res) => {
-  const { name, color } = req.body
-  if (!name || !color) {
-    return res.status(400).json({ message: 'Tag name and color are required.' })
+  if (typeof pinned !== 'boolean') {
+    return res.status(400).json({ message: 'Pinned must be true or false.' })
   }
 
   try {
-    const tag = {
-      userId: req.user._id,
-      ownerId: req.user._id,
-      name: name.trim(),
-      color,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    const existingDoc = await findDocumentById(documentId)
+    if (!existingDoc || existingDoc.deletedAt) {
+      return res.status(404).json({ message: 'Document not found.' })
     }
-    const result = await insertTag(tag)
-    res.status(201).json({ data: { ...tag, _id: result.insertedId } })
-  } catch (error) {
-    res.status(500).json({ message: 'Unable to create tag.' })
-  }
-})
-
-router.put('/api/user/tags/:id', authenticate, async (req, res) => {
-  const { name, color } = req.body
-  const tagId = req.params.id
-
-  if (!name || !color) {
-    return res.status(400).json({ message: 'Tag name and color are required.' })
-  }
-
-  try {
-    const ownedTag = isMongoConnected() && collections.tags
-      ? await collections.tags.findOne({ _id: new ObjectId(tagId), ownerId: new ObjectId(req.user._id) })
-      : (await findTagsForUser(req.user._id)).find((tag) => String(tag._id) === String(tagId))
-
-    if (!ownedTag) {
-      return res.status(404).json({ message: 'Tag not found.' })
+    if (!(await canPerformWriteAction(existingDoc, req.user))) {
+      return res.status(403).json({ message: 'You do not have permission to pin this document.' })
     }
 
-    const result = await updateTag(tagId, {
-      name: name.trim(),
-      color,
+    const result = await updateDocument(documentId, {
+      pinnedAt: pinned ? new Date() : null,
       updatedAt: new Date(),
     })
 
-    if (!result.value) {
-      return res.status(404).json({ message: 'Tag not found.' })
-    }
-
-    res.json({ data: result.value })
+    res.json({ data: result.value || result })
   } catch (error) {
-    res.status(500).json({ message: 'Unable to update tag.' })
+    res.status(500).json({ message: 'Unable to update document pin state.' })
   }
 })
 
-router.delete('/api/user/tags/:id', authenticate, async (req, res) => {
-  const tagId = req.params.id
+router.put('/api/user/folders/:id/pin', authenticate, async (req, res) => {
+  const folderId = req.params.id
+  const { pinned } = req.body
 
-  try {
-    const ownedTag = isMongoConnected() && collections.tags
-      ? await collections.tags.findOne({ _id: new ObjectId(tagId), ownerId: new ObjectId(req.user._id) })
-      : (await findTagsForUser(req.user._id)).find((tag) => String(tag._id) === String(tagId))
-
-    if (!ownedTag) {
-      return res.status(404).json({ message: 'Tag not found.' })
-    }
-
-    const result = await deleteTag(tagId)
-    if (isMongoConnected() && result.deletedCount === 0) {
-      return res.status(404).json({ message: 'Tag not found.' })
-    }
-
-    res.json({ message: 'Tag deleted successfully.' })
-  } catch (error) {
-    res.status(500).json({ message: 'Unable to delete tag.' })
-  }
-})
-
-router.get('/api/user/documents/:id/my-tags', authenticate, async (req, res) => {
-  const documentId = req.params.id
-  try {
-    const userTags = await findUserDocumentTags(req.user._id, documentId)
-    res.json({ data: userTags?.tags || [] })
-  } catch (error) {
-    res.status(500).json({ message: 'Unable to load document tags.' })
-  }
-})
-
-router.put('/api/user/documents/:id/my-tags', authenticate, async (req, res) => {
-  const documentId = req.params.id
-  const { tags } = req.body
-
-  if (!Array.isArray(tags)) {
-    return res.status(400).json({ message: 'Tags must be an array.' })
+  if (typeof pinned !== 'boolean') {
+    return res.status(400).json({ message: 'Pinned must be true or false.' })
   }
 
   try {
-    const doc = await findDocumentById(documentId)
-    if (!doc) {
-      return res.status(404).json({ message: 'Document not found.' })
+    const existingFolder = await findFolderById(folderId)
+    if (!existingFolder) {
+      return res.status(404).json({ message: 'Folder not found.' })
+    }
+    if (!(await canPerformWriteAction(existingFolder, req.user))) {
+      return res.status(403).json({ message: 'You do not have permission to pin this folder.' })
     }
 
-    const sanitizedTags = tags.map(String)
-    await upsertUserDocumentTags(req.user._id, documentId, sanitizedTags)
-    res.json({ data: { tags: sanitizedTags } })
+    const result = await updateFolder(folderId, {
+      pinnedAt: pinned ? new Date() : null,
+      updatedAt: new Date(),
+    })
+
+    res.json({ data: result.value || result })
   } catch (error) {
-    res.status(500).json({ message: 'Unable to update document tags.' })
+    res.status(500).json({ message: 'Unable to update folder pin state.' })
   }
 })
 
