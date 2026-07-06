@@ -30,6 +30,8 @@ docker compose up --build
 
 Configura `backend/.env` a partir de `backend/.env.example`
 (en particular `ENCRYPTION_KEY`, requerida para subir archivos).
+La guía completa de credenciales (cifrado, MongoDB/Atlas y login con
+Google) está en [CREDENCIALES.md](CREDENCIALES.md).
 
 ## Testing
 

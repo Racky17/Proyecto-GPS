@@ -9,6 +9,8 @@ const DocumentActionPopover = ({
   onOpenUpdateDocument,
   onOpenRevisionHistory,
   onDeleteDocument,
+  onPreviewDocument,
+  onDownloadDocument,
   t,
 }) => {
   const isVisible = openMoreActionsDocId === String(doc._id)
@@ -25,6 +27,34 @@ const DocumentActionPopover = ({
           style={{ minWidth: '220px' }}
         >
           <div className="d-flex flex-column gap-2 p-3">
+            {onPreviewDocument && (
+              <CButton
+                color="primary"
+                size="sm"
+                className="rounded-pill"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setOpenMoreActionsDocId(null)
+                  onPreviewDocument(doc)
+                }}
+              >
+                {t('home_preview') || 'Preview'}
+              </CButton>
+            )}
+            {onDownloadDocument && (
+              <CButton
+                color="secondary"
+                size="sm"
+                className="rounded-pill"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setOpenMoreActionsDocId(null)
+                  onDownloadDocument(doc)
+                }}
+              >
+                {t('home_download') || 'Download'}
+              </CButton>
+            )}
             <CButton
               color="secondary"
               size="sm"
@@ -89,11 +119,15 @@ DocumentActionPopover.propTypes = {
   onOpenUpdateDocument: PropTypes.func.isRequired,
   onOpenRevisionHistory: PropTypes.func.isRequired,
   onDeleteDocument: PropTypes.func.isRequired,
+  onPreviewDocument: PropTypes.func,
+  onDownloadDocument: PropTypes.func,
   t: PropTypes.func.isRequired,
 }
 
 DocumentActionPopover.defaultProps = {
   openMoreActionsDocId: null,
+  onPreviewDocument: null,
+  onDownloadDocument: null,
 }
 
 export default DocumentActionPopover

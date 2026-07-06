@@ -49,6 +49,18 @@ const validShareRoles = ['admin', 'write', 'read-only']
 // Content-Disposition header values must not contain quotes or CR/LF characters
 const sanitizeFilename = (filename) => String(filename).replace(/["\\\r\n]/g, '_')
 
+// Obtiene el contenido de un archivo (descifrado si es necesario) o null
+const getFileBuffer = (file) => {
+  if (!file) return null
+  if (file.encryptedData && file.iv && file.authTag) {
+    return decryptFile(file)
+  }
+  if (file.data) {
+    return Buffer.isBuffer(file.data) ? file.data : Buffer.from(file.data.buffer || file.data)
+  }
+  return null
+}
+
 const isVerifiedUser = (user) => user && user.verified !== false
 
 const resolveShareTarget = async ({ targetEmail, targetUserId, targetOrgId }) => {
@@ -344,6 +356,40 @@ router.get('/api/user/documents/:id/download', authenticate, async (req, res) =>
     res.send(fileData)
   } catch (error) {
     res.status(500).json({ message: 'Unable to download document.' })
+  }
+})
+
+// Igual que /download pero sirve el archivo "inline" para que el navegador
+// pueda renderizarlo (imágenes, PDF, texto, audio, vídeo...).
+router.get('/api/user/documents/:id/preview', authenticate, async (req, res) => {
+  const documentId = req.params.id
+
+  try {
+    const document = await findDocumentForUser(documentId, req.user._id)
+    if (!document) {
+      return res.status(404).json({ message: 'Document not found.' })
+    }
+
+    if (!document.file) {
+      return res.status(404).json({ message: 'No file attached to this document.' })
+    }
+
+    let fileData
+    try {
+      fileData = getFileBuffer(document.file)
+    } catch (decryptError) {
+      return res.status(500).json({ message: 'Unable to decrypt document file.' })
+    }
+    if (!fileData) {
+      return res.status(404).json({ message: 'No file data found.' })
+    }
+
+    const filename = document.file.originalName || document.title || 'document'
+    res.setHeader('Content-Type', document.file.contentType || 'application/octet-stream')
+    res.setHeader('Content-Disposition', `inline; filename="${sanitizeFilename(filename)}"`)
+    res.send(fileData)
+  } catch (error) {
+    res.status(500).json({ message: 'Unable to preview document.' })
   }
 })
 

@@ -34,6 +34,7 @@ import ItemActions from './components/ItemActions'
 import DeleteItemPopover from './components/DeleteItemPopover'
 import DocumentTagPopover from './components/DocumentTagPopover'
 import DocumentActionPopover from './components/DocumentActionPopover'
+import DocumentPreviewModal from './components/DocumentPreviewModal'
 import RevisionHistoryModal from './components/RevisionHistoryModal'
 import UploadDocumentModal from './components/UploadDocumentModal'
 import ShareModal from './components/ShareModal'
@@ -64,6 +65,7 @@ const Home = () => {
   const [loading, setLoading] = useState(false)
   const [showDocumentUploadModal, setShowDocumentUploadModal] = useState(false)
   const [openMoreActionsDocId, setOpenMoreActionsDocId] = useState(null)
+  const [previewDoc, setPreviewDoc] = useState(null)
   const [showDocumentUpdateModal, setShowDocumentUpdateModal] = useState(false)
   const [documentToUpdate, setDocumentToUpdate] = useState(null)
   const [selectedUpdateFile, setSelectedUpdateFile] = useState(null)
@@ -650,7 +652,9 @@ const Home = () => {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = doc.title || doc.file?.originalName || 'document'
+      // Se prefiere el nombre original: conserva la extensión para
+      // que cualquier tipo de archivo se abra correctamente al descargarlo
+      link.download = doc.file?.originalName || doc.title || 'document'
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -658,6 +662,15 @@ const Home = () => {
     } catch (error) {
       setMessage('Unable to download document. Please try again.')
     }
+  }
+
+  const openPreviewModal = (doc) => {
+    if (!authToken) {
+      setMessage('You must be logged in to preview documents.')
+      return
+    }
+    setMessage('')
+    setPreviewDoc(doc)
   }
 
   const handleSelectDocument = (doc) => {
@@ -1809,6 +1822,17 @@ const Home = () => {
           t={t}
         />
 
+        {previewDoc && (
+          <DocumentPreviewModal
+            doc={previewDoc}
+            apiBase={apiBase}
+            authToken={authToken}
+            onClose={() => setPreviewDoc(null)}
+            onDownload={downloadDocument}
+            t={t}
+          />
+        )}
+
         <CModal
           visible={showCreateShareModal}
           size="lg"
@@ -1999,6 +2023,8 @@ const Home = () => {
                                         doc={doc}
                                         openMoreActionsDocId={openMoreActionsDocId}
                                         setOpenMoreActionsDocId={setOpenMoreActionsDocId}
+                                        onPreviewDocument={openPreviewModal}
+                                        onDownloadDocument={downloadDocument}
                                         onOpenUpdateDocument={handleOpenDocumentUpdateModal}
                                         onOpenRevisionHistory={handleOpenRevisionHistoryModal}
                                         onDeleteDocument={handleDeleteDocument}
@@ -2071,8 +2097,11 @@ const Home = () => {
                                         doc={doc}
                                         openMoreActionsDocId={openMoreActionsDocId}
                                         setOpenMoreActionsDocId={setOpenMoreActionsDocId}
+                                        onPreviewDocument={openPreviewModal}
+                                        onDownloadDocument={downloadDocument}
                                         onOpenUpdateDocument={handleOpenDocumentUpdateModal}
                                         onOpenRevisionHistory={handleOpenRevisionHistoryModal}
+                                        onDeleteDocument={handleDeleteDocument}
                                         t={t}
                                       />
                                     }
@@ -2202,6 +2231,8 @@ const Home = () => {
                                         doc={doc}
                                         openMoreActionsDocId={openMoreActionsDocId}
                                         setOpenMoreActionsDocId={setOpenMoreActionsDocId}
+                                        onPreviewDocument={openPreviewModal}
+                                        onDownloadDocument={downloadDocument}
                                         onOpenUpdateDocument={handleOpenDocumentUpdateModal}
                                         onOpenRevisionHistory={handleOpenRevisionHistoryModal}
                                         onDeleteDocument={handleDeleteDocument}
@@ -2280,6 +2311,8 @@ const Home = () => {
                                         doc={doc}
                                         openMoreActionsDocId={openMoreActionsDocId}
                                         setOpenMoreActionsDocId={setOpenMoreActionsDocId}
+                                        onPreviewDocument={openPreviewModal}
+                                        onDownloadDocument={downloadDocument}
                                         onOpenUpdateDocument={handleOpenDocumentUpdateModal}
                                         onOpenRevisionHistory={handleOpenRevisionHistoryModal}
                                         onDeleteDocument={handleDeleteDocument}
